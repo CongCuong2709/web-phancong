@@ -1,0 +1,429 @@
+// ============================================================
+// routes/tasks.js — CRUD Task (công việc gốc)
+// ============================================================
+const express = require('express');
+const { randomUUID: uuidv4 } = require('crypto');
+
+const db = require('../db');
+const { requireAuth, requireRole } = require('../middleware/auth');
+
+const router = express.Router();
+router.use(requireAuth);
+
+// ============================================================
+// Helper: tính progress task từ subtasks
+// ============================================================
+function recalcTaskProgress(taskId) {
+  const subs = db.prepare('SELECT progress FROM subtasks WHERE task_id = ?').all(taskId);
+  if (!subs.length) return null; // không có subtask → không ghi đè
+  const avg = Math.round(subs.reduce((s, r) => s + r.progress, 0) / subs.length);
+  db.prepare('UPDATE tasks SET progress = ?, updated_at = ? WHERE id = ?')
+    .run(avg, new Date().toISOString(), taskId);
+  return avg;
+}
+
+// ============================================================
+// Helper: lọc task theo role
+// ============================================================
+function getTasksForUser(user) {
+  let tasks;
+  if (user.role === 'director' || user.role === 'admin') {
+    // Thấy tất cả
+    tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+  } else if (user.role === 'manager') {
+    // Thấy task phòng mình + phòng phối hợp
+    tasks = db.prepare(`
+      SELECT * FROM tasks
+      WHERE department = ?
+         OR collab_depts LIKE ?
+      ORDER BY created_at DESC
+    `).all(user.department, `%"${user.department}"%`);
+  } else {
+    // employee: thấy task có subtask được giao cho mình
+    tasks = db.prepare(`
+      SELECT DISTINCT t.* FROM tasks t
+      INNER JOIN subtasks s ON s.task_id = t.id
+      INNER JOIN users u ON u.id = s.assignee_id
+      WHERE u.id = ?
+      ORDER BY t.created_at DESC
+    `).all(user.id);
+  }
+  return tasks;
+}
+
+// ============================================================
+// Serialize task: parse collab_depts JSON + gắn subtasks
+// ============================================================
+function serializeTask(t, includeSubtasks = true) {
+  let collaboratingDepts = [];
+  try { collaboratingDepts = JSON.parse(t.collab_depts); } catch {}
+
+  // Lấy tên assignee
+  const assignee = t.assignee_id
+    ? db.prepare('SELECT id, fullname, role, department FROM users WHERE id = ?').get(t.assignee_id)
+    : null;
+
+  const task = {
+    id: t.id,
+    code: t.code,
+    name: t.name,
+    description: t.description,
+    department: t.department,
+    collaboratingDepts,
+    assigneeId: t.assignee_id,
+    assignee: assignee ? assignee.fullname : t.created_by,
+    createdBy: t.created_by,
+    startDate: t.start_date,
+    endDate: t.end_date,
+    progress: t.progress,
+    status: t.status,
+    priority: t.priority,
+    results: t.results,
+    notes: t.notes,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+    subTasks: [],
+    history: [],
+  };
+
+  if (includeSubtasks) {
+    const subs = db.prepare('SELECT * FROM subtasks WHERE task_id = ? ORDER BY created_at ASC').all(t.id);
+    task.subTasks = subs.map(s => {
+      const assigneeUser = s.assignee_id
+        ? db.prepare('SELECT id, fullname FROM users WHERE id = ?').get(s.assignee_id)
+        : null;
+      const logs = db.prepare('SELECT * FROM daily_logs WHERE subtask_id = ? ORDER BY log_date DESC').all(s.id);
+      return {
+        id: s.id,
+        taskId: s.task_id,
+        name: s.name,
+        description: s.description,
+        assigneeId: s.assignee_id,
+        assignee: assigneeUser ? assigneeUser.fullname : '',
+        startDate: s.start_date,
+        endDate: s.end_date,
+        progress: s.progress,
+        status: s.status,
+        priority: s.priority,
+        results: s.results,
+        notes: s.notes,
+        createdAt: s.created_at,
+        updatedAt: s.updated_at,
+        history: [],
+        dailyLogs: logs.map(l => ({
+          id: l.id,
+          date: l.log_date,
+          description: l.description,
+          result: l.result,
+          obstacle: l.obstacle,
+          progress: l.progress,
+          userId: l.user_id,
+          createdAt: l.created_at,
+        })),
+      };
+    });
+
+    // Lấy history
+    const hist = db.prepare(`
+      SELECT * FROM history WHERE entity_type = 'task' AND entity_id = ?
+      ORDER BY created_at ASC
+    `).all(t.id);
+    task.history = hist.map(h => ({ at: h.created_at, action: h.action, user: h.user_name }));
+  }
+
+  return task;
+}
+
+// ============================================================
+// GET /api/tasks
+// ============================================================
+router.get('/', (req, res) => {
+  const rows = getTasksForUser(req.user);
+  res.json(rows.map(t => serializeTask(t, true)));
+});
+
+// ============================================================
+// GET /api/tasks/:id
+// ============================================================
+router.get('/:id', (req, res) => {
+  const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+  res.json(serializeTask(t, true));
+});
+
+// ============================================================
+// POST /api/tasks — Tạo task mới (director / manager)
+// ============================================================
+router.post('/', requireRole('admin', 'director', 'manager'), (req, res) => {
+  const {
+    code, name, description, department, collaboratingDepts,
+    assigneeId, startDate, endDate, priority, notes,
+  } = req.body;
+
+  if (!name?.trim()) return res.status(400).json({ error: 'Tên công việc là bắt buộc' });
+
+  // Tự tạo code nếu không cung cấp
+  let taskCode = code?.trim();
+  if (!taskCode) {
+    const count = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
+    taskCode = `DA${String(count + 1).padStart(3, '0')}`;
+  }
+
+  const id = uuidv4();
+  const now = new Date().toISOString();
+  const dept = department?.trim() || req.user.department;
+
+  db.prepare(`
+    INSERT INTO tasks (id, code, name, description, department, collab_depts,
+      assignee_id, created_by, start_date, end_date, priority, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, taskCode, name.trim(), description?.trim() || '',
+    dept,
+    JSON.stringify(Array.isArray(collaboratingDepts) ? collaboratingDepts : []),
+    assigneeId || null,
+    req.user.fullname,
+    startDate || '', endDate || '',
+    priority || 'medium', notes?.trim() || '',
+    now, now
+  );
+
+  // Ghi history
+  db.prepare(`INSERT INTO history (id, entity_type, entity_id, action, user_id, user_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(uuidv4(), 'task', id, 'Tạo công việc', req.user.id, req.user.fullname, now);
+
+  const newTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  res.status(201).json(serializeTask(newTask, true));
+});
+
+// ============================================================
+// PUT /api/tasks/:id — Cập nhật task
+// ============================================================
+router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
+  const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+
+  // Manager chỉ sửa task phòng mình
+  if (req.user.role === 'manager' && t.department !== req.user.department) {
+    return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc này' });
+  }
+
+  const {
+    name, description, department, collaboratingDepts,
+    assigneeId, startDate, endDate, progress, status, priority, results, notes,
+  } = req.body;
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE tasks SET
+      name            = COALESCE(?, name),
+      description     = COALESCE(?, description),
+      department      = COALESCE(?, department),
+      collab_depts    = COALESCE(?, collab_depts),
+      assignee_id     = COALESCE(?, assignee_id),
+      start_date      = COALESCE(?, start_date),
+      end_date        = COALESCE(?, end_date),
+      progress        = COALESCE(?, progress),
+      status          = COALESCE(?, status),
+      priority        = COALESCE(?, priority),
+      results         = COALESCE(?, results),
+      notes           = COALESCE(?, notes),
+      updated_at      = ?
+    WHERE id = ?
+  `).run(
+    name?.trim() || null,
+    description?.trim() ?? null,
+    department?.trim() || null,
+    collaboratingDepts !== undefined ? JSON.stringify(collaboratingDepts) : null,
+    assigneeId !== undefined ? assigneeId : null,
+    startDate || null,
+    endDate || null,
+    progress !== undefined ? Number(progress) : null,
+    status || null,
+    priority || null,
+    results?.trim() ?? null,
+    notes?.trim() ?? null,
+    now,
+    req.params.id
+  );
+
+  db.prepare(`INSERT INTO history (id, entity_type, entity_id, action, user_id, user_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(uuidv4(), 'task', req.params.id, 'Cập nhật công việc', req.user.id, req.user.fullname, now);
+
+  const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  res.json(serializeTask(updated, true));
+});
+
+// ============================================================
+// DELETE /api/tasks/:id — Xóa task (chỉ director/admin)
+// ============================================================
+router.delete('/:id', requireRole('admin', 'director'), (req, res) => {
+  const t = db.prepare('SELECT id FROM tasks WHERE id = ?').get(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+
+  db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
+  res.json({ message: 'Đã xóa công việc' });
+});
+
+// ============================================================
+// Subtask routes (nested)
+// ============================================================
+
+// GET /api/tasks/:id/subtasks
+router.get('/:id/subtasks', (req, res) => {
+  const subs = db.prepare('SELECT * FROM subtasks WHERE task_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(subs);
+});
+
+// POST /api/tasks/:taskId/subtasks — Tạo subtask (manager+)
+router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.taskId);
+  if (!task) return res.status(404).json({ error: 'Không tìm thấy công việc' });
+
+  if (req.user.role === 'manager' && task.department !== req.user.department) {
+    return res.status(403).json({ error: 'Không có quyền thêm công việc con vào task này' });
+  }
+
+  const { name, description, assigneeId, startDate, endDate, priority, notes } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Tên công việc con là bắt buộc' });
+
+  const id = uuidv4();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO subtasks (id, task_id, name, description, assignee_id, start_date, end_date, priority, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.params.taskId, name.trim(), description?.trim() || '',
+    assigneeId || null, startDate || '', endDate || '',
+    priority || 'medium', notes?.trim() || '', now, now);
+
+  // Recalc task progress
+  recalcTaskProgress(req.params.taskId);
+
+  db.prepare(`INSERT INTO history (id, entity_type, entity_id, action, user_id, user_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(uuidv4(), 'subtask', id, `Thêm công việc con: "${name}"`, req.user.id, req.user.fullname, now);
+
+  const newSub = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
+  const assignee = newSub.assignee_id
+    ? db.prepare('SELECT fullname FROM users WHERE id = ?').get(newSub.assignee_id)
+    : null;
+
+  res.status(201).json({
+    ...newSub,
+    assignee: assignee?.fullname || '',
+    dailyLogs: [],
+    history: [],
+  });
+});
+
+// PUT /api/tasks/:taskId/subtasks/:subId — Cập nhật subtask
+router.put('/:taskId/subtasks/:subId', (req, res) => {
+  const sub = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(req.params.subId, req.params.taskId);
+  if (!sub) return res.status(404).json({ error: 'Không tìm thấy công việc con' });
+
+  // Employee chỉ cập nhật subtask được giao cho mình
+  if (req.user.role === 'employee' && sub.assignee_id !== req.user.id) {
+    return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc con này' });
+  }
+
+  const { name, description, assigneeId, startDate, endDate, progress, status, priority, results, notes } = req.body;
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE subtasks SET
+      name        = COALESCE(?, name),
+      description = COALESCE(?, description),
+      assignee_id = COALESCE(?, assignee_id),
+      start_date  = COALESCE(?, start_date),
+      end_date    = COALESCE(?, end_date),
+      progress    = COALESCE(?, progress),
+      status      = COALESCE(?, status),
+      priority    = COALESCE(?, priority),
+      results     = COALESCE(?, results),
+      notes       = COALESCE(?, notes),
+      updated_at  = ?
+    WHERE id = ?
+  `).run(
+    name?.trim() || null,
+    description?.trim() ?? null,
+    assigneeId !== undefined ? assigneeId : null,
+    startDate || null, endDate || null,
+    progress !== undefined ? Number(progress) : null,
+    status || null, priority || null,
+    results?.trim() ?? null, notes?.trim() ?? null,
+    now, req.params.subId
+  );
+
+  // Recalc task progress
+  recalcTaskProgress(req.params.taskId);
+
+  const updated = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(req.params.subId);
+  const assigneeUser = updated.assignee_id
+    ? db.prepare('SELECT fullname FROM users WHERE id = ?').get(updated.assignee_id)
+    : null;
+
+  res.json({ ...updated, assignee: assigneeUser?.fullname || '' });
+});
+
+// DELETE /api/tasks/:taskId/subtasks/:subId
+router.delete('/:taskId/subtasks/:subId', requireRole('admin', 'director', 'manager'), (req, res) => {
+  const sub = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(req.params.subId, req.params.taskId);
+  if (!sub) return res.status(404).json({ error: 'Không tìm thấy công việc con' });
+
+  db.prepare('DELETE FROM subtasks WHERE id = ?').run(req.params.subId);
+  recalcTaskProgress(req.params.taskId);
+  res.json({ message: 'Đã xóa công việc con' });
+});
+
+// ============================================================
+// Daily Log routes
+// ============================================================
+
+// POST /api/tasks/:taskId/subtasks/:subId/logs
+router.post('/:taskId/subtasks/:subId/logs', (req, res) => {
+  const sub = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(req.params.subId, req.params.taskId);
+  if (!sub) return res.status(404).json({ error: 'Không tìm thấy công việc con' });
+
+  // Employee chỉ ghi log cho subtask của mình
+  if (req.user.role === 'employee' && sub.assignee_id !== req.user.id) {
+    return res.status(403).json({ error: 'Không có quyền ghi nhật ký cho công việc này' });
+  }
+
+  const { date, description, result, obstacle, progress } = req.body;
+  if (!date) return res.status(400).json({ error: 'Ngày là bắt buộc' });
+
+  const id = uuidv4();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO daily_logs (id, subtask_id, log_date, description, result, obstacle, progress, user_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.params.subId, date, description || '', result || '', obstacle || '',
+    Number(progress) || 0, req.user.id, now);
+
+  // Cập nhật progress subtask theo log mới nhất
+  if (progress !== undefined) {
+    db.prepare('UPDATE subtasks SET progress = ?, updated_at = ? WHERE id = ?')
+      .run(Number(progress), now, req.params.subId);
+    recalcTaskProgress(req.params.taskId);
+  }
+
+  res.status(201).json({ id, subtaskId: req.params.subId, date, description, result, obstacle, progress: Number(progress) || 0, userId: req.user.id, createdAt: now });
+});
+
+// GET /api/tasks/:taskId/subtasks/:subId/logs
+router.get('/:taskId/subtasks/:subId/logs', (req, res) => {
+  const logs = db.prepare(`
+    SELECT dl.*, u.fullname as user_name
+    FROM daily_logs dl
+    LEFT JOIN users u ON u.id = dl.user_id
+    WHERE dl.subtask_id = ?
+    ORDER BY dl.log_date DESC
+  `).all(req.params.subId);
+  res.json(logs);
+});
+
+module.exports = router;

@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hệ thống Phân công Công việc</title>
+  <meta name="description" content="Hệ thống phân công và theo dõi công việc nội bộ — 3 cấp: Giám đốc, Trưởng phòng, Nhân viên" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+  <!-- ============ LOGIN ============ -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-100 mb-4">
+          <i data-lucide="briefcase" class="w-8 h-8 text-indigo-600"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900">Phân công Công việc</h1>
+        <p class="text-slate-500 mt-2">Hệ thống quản lý công việc 3 cấp</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Tên đăng nhập</label>
+          <div class="relative">
+            <i data-lucide="user" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input id="loginUsername" type="text" placeholder="VD: giamdoc, tp.it, nv.it01"
+                   autocomplete="username"
+                   class="w-full pl-9 pr-3 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Mật khẩu</label>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input id="loginPassword" type="password" placeholder="Nhập mật khẩu"
+                   autocomplete="current-password"
+                   class="w-full pl-9 pr-3 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
+          </div>
+        </div>
+        <button id="loginBtn" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2">
+          <i data-lucide="log-in" class="w-5 h-5"></i>
+          Đăng nhập
+        </button>
+      </form>
+
+      <div class="mt-6 p-4 bg-slate-50 rounded-lg text-xs text-slate-600 space-y-1">
+        <p class="font-semibold mb-1">📋 Tài khoản mẫu (demo):</p>
+        <p>🏢 Giám đốc: <strong>giamdoc</strong> / giamdoc123</p>
+        <p>👔 Trưởng phòng IT: <strong>tp.it</strong> / 123456</p>
+        <p>🧑 Nhân viên: <strong>nv.it01</strong> / 123456</p>
+        <p class="text-slate-400 mt-2">(Admin xóa khối này sau khi deploy)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MAIN APP ============ -->
+  <div id="appScreen" class="hidden">
+    <!-- TOP NAV -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+              <i data-lucide="briefcase" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <h1 class="text-base font-bold text-slate-900">Phân công Công việc</h1>
+              <p class="text-xs text-slate-500" id="userInfo">—</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <button data-nav="dashboard" class="nav-btn">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Tổng quan</span>
+            </button>
+            <button data-nav="projects" class="nav-btn">
+              <i data-lucide="folder-kanban" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Công việc</span>
+            </button>
+            <button data-nav="myTasks" class="nav-btn">
+              <i data-lucide="list-checks" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Việc của tôi</span>
+            </button>
+            <button data-nav="reports" class="nav-btn">
+              <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Báo cáo</span>
+            </button>
+            <button data-action="logout" class="nav-btn text-rose-600 hover:bg-rose-50">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Đăng xuất</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- CONTENT -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+      <!-- ============ DASHBOARD ============ -->
+      <section id="view-dashboard" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Tổng quan</h2>
+            <p class="text-sm text-slate-500 mt-1" id="dashboardGreeting">—</p>
+          </div>
+          <button data-action="open-project-modal" class="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Tạo công việc
+          </button>
+        </div>
+
+        <!-- Stat cards — 4 cột cố định + 1 cột dynamic (statExtra) -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div class="bg-white p-5 rounded-xl border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <i data-lucide="folder" class="w-5 h-5 text-blue-600"></i>
+              </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900" id="statTotal">0</p>
+            <p class="text-sm text-slate-500 mt-1">Tổng công việc</p>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                <i data-lucide="loader" class="w-5 h-5 text-amber-600"></i>
+              </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900" id="statInProgress">0</p>
+            <p class="text-sm text-slate-500 mt-1">Đang thực hiện</p>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>
+              </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900" id="statCompleted">0</p>
+            <p class="text-sm text-slate-500 mt-1">Hoàn thành</p>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600"></i>
+              </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900" id="statOverdue">0</p>
+            <p class="text-sm text-slate-500 mt-1">Quá hạn</p>
+          </div>
+          <!-- Dynamic 5th card (role-specific) -->
+          <div id="statExtra"></div>
+        </div>
+
+        <!-- Two columns: recent + by department/employee/log-reminder -->
+        <div class="grid lg:grid-cols-3 gap-6 mb-6">
+          <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200">
+            <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 class="font-semibold text-slate-900">Công việc gần đây</h3>
+              <button data-nav="projects" class="text-sm text-indigo-600 hover:text-indigo-700">Xem tất cả</button>
+            </div>
+            <div id="recentProjects" class="p-2"></div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-slate-200">
+            <div class="px-5 py-4 border-b border-slate-200">
+              <h3 class="font-semibold text-slate-900" id="deptStatsTitle">Theo phòng ban</h3>
+            </div>
+            <div id="deptStats" class="p-5 space-y-3"></div>
+          </div>
+        </div>
+
+        <!-- Overdue panel -->
+        <div class="bg-white rounded-xl border border-rose-200">
+          <div class="px-5 py-4 border-b border-rose-100 flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i>
+            <h3 class="font-semibold text-slate-900">Công việc quá hạn</h3>
+          </div>
+          <div id="overdueList" class="px-5 py-3"></div>
+        </div>
+      </section>
+
+      <!-- ============ PROJECTS ============ -->
+      <section id="view-projects" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Danh sách công việc</h2>
+            <p class="text-sm text-slate-500 mt-1">Quản lý và theo dõi các công việc đang triển khai</p>
+          </div>
+          <button data-action="open-project-modal" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Tạo công việc mới
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div class="lg:col-span-2 relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input id="filterSearch" type="text" placeholder="Tìm theo mã, tên, người thực hiện..."
+                   class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+          <select id="filterDept" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+            <option value="">Tất cả phòng ban</option>
+          </select>
+          <select id="filterStatus" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+            <option value="">Tất cả trạng thái</option>
+            <option value="not_started">Chưa bắt đầu</option>
+            <option value="in_progress">Đang thực hiện</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="on_hold">Tạm dừng</option>
+          </select>
+          <select id="filterPriority" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+            <option value="">Tất cả mức độ</option>
+            <option value="high">Cao</option>
+            <option value="medium">Trung bình</option>
+            <option value="low">Thấp</option>
+          </select>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+                <tr>
+                  <th class="px-4 py-3 text-left font-medium">Mã</th>
+                  <th class="px-4 py-3 text-left font-medium">Tên công việc</th>
+                  <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Phòng ban</th>
+                  <th class="px-4 py-3 text-left font-medium hidden lg:table-cell">Người nhận</th>
+                  <th class="px-4 py-3 text-left font-medium">Tiến độ</th>
+                  <th class="px-4 py-3 text-left font-medium">Trạng thái</th>
+                  <th class="px-4 py-3 text-left font-medium hidden lg:table-cell">Hạn cuối</th>
+                  <th class="px-4 py-3 text-right font-medium">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="projectTableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+          <div id="emptyProjects" class="hidden p-10 text-center text-slate-400">
+            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3"></i>
+            <p>Không có công việc nào phù hợp</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ MY TASKS ============ -->
+      <section id="view-myTasks" class="view hidden">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Việc của tôi</h2>
+            <p class="text-sm text-slate-500 mt-1">Các công việc được phân công cho bạn</p>
+          </div>
+        </div>
+
+        <div id="myTasksList" class="grid gap-4"></div>
+        <div id="emptyMyTasks" class="hidden bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
+          <p class="text-slate-500">Bạn chưa được giao công việc nào</p>
+        </div>
+      </section>
+
+      <!-- ============ REPORTS ============ -->
+      <section id="view-reports" class="view hidden">
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-slate-900">Báo cáo & Thống kê</h2>
+          <p class="text-sm text-slate-500 mt-1">Tổng hợp tình hình triển khai công việc</p>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 class="font-semibold text-slate-900 mb-4">Phân bổ theo trạng thái</h3>
+            <div id="statusChart" class="space-y-3"></div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 class="font-semibold text-slate-900 mb-4">Phân bổ theo phòng ban</h3>
+            <div id="deptChart" class="space-y-3"></div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 class="font-semibold text-slate-900 mb-4">Theo mức độ ưu tiên</h3>
+            <div id="priorityChart" class="space-y-3"></div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 class="font-semibold text-slate-900 mb-4">Tiến độ trung bình theo phòng ban</h3>
+            <div id="deptProgressChart" class="space-y-3"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ============ PROJECT MODAL (Task gốc) ============ -->
+  <div id="projectModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+        <h3 id="projectModalTitle" class="text-lg font-bold text-slate-900">Tạo công việc mới</h3>
+        <button data-action="close-project-modal" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="projectForm" class="p-6 space-y-4">
+        <input type="hidden" id="projectId" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Mã công việc <span class="text-rose-500">*</span></label>
+            <input id="fCode" required type="text" placeholder="VD: DA001"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Tên công việc <span class="text-rose-500">*</span></label>
+            <input id="fName" required type="text" placeholder="Nhập tên công việc"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Mô tả / Yêu cầu</label>
+          <textarea id="fDescription" rows="3" placeholder="Mô tả chi tiết nội dung, yêu cầu thêm..."
+                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Phòng ban chủ trì <span class="text-rose-500">*</span></label>
+            <select id="fDept" required class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+              <option value="Phòng IT">Phòng IT</option>
+              <option value="Phòng Kế toán">Phòng Kế toán</option>
+              <option value="Phòng Nhân sự">Phòng Nhân sự</option>
+              <option value="Phòng Kinh doanh">Phòng Kinh doanh</option>
+              <option value="Phòng Marketing">Phòng Marketing</option>
+              <option value="Ban Giám đốc">Ban Giám đốc</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Giao cho (Trưởng phòng) <span class="text-rose-500">*</span></label>
+            <select id="fAssigneeId"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+              <option value="">— Chọn người nhận —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Phòng phối hợp -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Phòng phối hợp thêm</label>
+          <div class="checkbox-group">
+            <label>
+              <input type="checkbox" name="collabDept" value="Phòng IT" class="w-4 h-4 rounded text-indigo-600" />
+              <span>Phòng IT</span>
+            </label>
+            <label>
+              <input type="checkbox" name="collabDept" value="Phòng Kế toán" class="w-4 h-4 rounded text-indigo-600" />
+              <span>Phòng Kế toán</span>
+            </label>
+            <label>
+              <input type="checkbox" name="collabDept" value="Phòng Nhân sự" class="w-4 h-4 rounded text-indigo-600" />
+              <span>Phòng Nhân sự</span>
+            </label>
+            <label>
+              <input type="checkbox" name="collabDept" value="Phòng Kinh doanh" class="w-4 h-4 rounded text-indigo-600" />
+              <span>Phòng Kinh doanh</span>
+            </label>
+            <label>
+              <input type="checkbox" name="collabDept" value="Phòng Marketing" class="w-4 h-4 rounded text-indigo-600" />
+              <span>Phòng Marketing</span>
+            </label>
+            <label>
+              <input type="checkbox" name="collabDept" value="Ban Giám đốc" class="w-4 h-4 rounded text-indigo-600" />
+              <span>Ban Giám đốc</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Ngày bắt đầu</label>
+            <input id="fStartDate" type="date"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Hạn xong</label>
+            <input id="fEndDate" type="date"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Mức độ ưu tiên</label>
+            <select id="fPriority" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+              <option value="low">Thấp</option>
+              <option value="medium" selected>Trung bình</option>
+              <option value="high">Cao</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Tiến độ (%)</label>
+            <input id="fProgress" type="number" min="0" max="100" value="0"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Trạng thái</label>
+            <select id="fStatus" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+              <option value="not_started">Chưa bắt đầu</option>
+              <option value="in_progress">Đang thực hiện</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="on_hold">Tạm dừng</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Kết quả thực hiện</label>
+          <textarea id="fResults" rows="2" placeholder="Cập nhật kết quả thực hiện..."
+                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" data-action="close-project-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">Lưu công việc</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ SUBTASK MODAL ============ -->
+  <div id="subTaskModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+            <i data-lucide="git-branch" class="w-4 h-4 text-violet-600"></i>
+          </div>
+          <h3 id="subTaskModalTitle" class="text-lg font-bold text-slate-900">Thêm công việc con</h3>
+        </div>
+        <button data-action="close-subtask-modal" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="subTaskForm" class="p-6 space-y-4">
+        <input type="hidden" id="stProjectId" />
+        <input type="hidden" id="stSubTaskId" />
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Tên công việc con <span class="text-rose-500">*</span></label>
+          <input id="stName" required type="text" placeholder="VD: Migrate dữ liệu module kế toán"
+                 class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Mô tả thêm</label>
+          <textarea id="stDescription" rows="2" placeholder="Chi tiết yêu cầu..."
+                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Giao cho (Nhân viên) <span class="text-rose-500">*</span></label>
+          <select id="stAssigneeId"
+                 class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
+            <option value="">— Chọn nhân viên —</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Ngày bắt đầu</label>
+            <input id="stStartDate" type="date"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Hạn xong</label>
+            <input id="stEndDate" type="date"
+                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Mức độ ưu tiên</label>
+            <select id="stPriority" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
+              <option value="low">Thấp</option>
+              <option value="medium" selected>Trung bình</option>
+              <option value="high">Cao</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Trạng thái</label>
+            <select id="stStatus" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
+              <option value="not_started">Chưa bắt đầu</option>
+              <option value="in_progress">Đang thực hiện</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="on_hold">Tạm dừng</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" data-action="close-subtask-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium flex items-center gap-2">
+            <i data-lucide="git-branch" class="w-4 h-4"></i> Lưu công việc con
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ DAILY LOG MODAL ============ -->
+  <div id="dailyLogModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+            <i data-lucide="book-open" class="w-4 h-4 text-indigo-600"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Nhật ký hôm nay</h3>
+            <p id="dlSubTaskName" class="text-xs text-slate-500 truncate max-w-xs"></p>
+          </div>
+        </div>
+        <button data-action="close-dailylog-modal" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="dailyLogForm" class="p-6 space-y-4">
+        <input type="hidden" id="dlProjectId" />
+        <input type="hidden" id="dlSubTaskId" />
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            <span class="flex items-center gap-1"><i data-lucide="pen-line" class="w-3.5 h-3.5"></i> Hôm nay đã làm gì?</span>
+          </label>
+          <textarea id="dlDescription" rows="2" placeholder="Mô tả các việc đã thực hiện hôm nay..."
+                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            <span class="flex items-center gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-500"></i> Kết quả đạt được</span>
+          </label>
+          <textarea id="dlResult" rows="2" placeholder="Kết quả cụ thể đã hoàn thành..."
+                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            <span class="flex items-center gap-1"><i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-500"></i> Vướng mắc / Khó khăn (nếu có)</span>
+          </label>
+          <textarea id="dlObstacle" rows="2" placeholder="Nêu vướng mắc nếu có, hoặc để trống..."
+                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            <span class="flex items-center gap-1"><i data-lucide="percent" class="w-3.5 h-3.5 text-indigo-500"></i> % Hoàn thành đến hôm nay</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input id="dlProgress" type="range" min="0" max="100" step="5" value="0"
+                   class="flex-1 h-2 rounded-lg appearance-none bg-slate-200 accent-indigo-600" />
+            <span id="dlProgressLabel" class="text-sm font-bold text-indigo-600 w-12 text-right">0%</span>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" data-action="close-dailylog-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center gap-2">
+            <i data-lucide="save" class="w-4 h-4"></i> Lưu nhật ký
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ DETAIL MODAL ============ -->
+  <div id="detailModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+        <h3 id="detailTitle" class="text-lg font-bold text-slate-900">Chi tiết công việc</h3>
+        <button data-action="close-detail-modal" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="detailBody" class="p-6 space-y-4"></div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST ============ -->
+  <div id="toast" class="fixed bottom-6 right-6 hidden z-50 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+    <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+    <span id="toastMsg">Thành công</span>
+  </div>
+
+  <!-- Live range value display -->
+  <script>
+    document.addEventListener('input', function(e) {
+      if (e.target && e.target.id === 'dlProgress') {
+        const label = document.getElementById('dlProgressLabel');
+        if (label) label.textContent = e.target.value + '%';
+      }
+    });
+  </script>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
