@@ -52,13 +52,13 @@ function seedIfEmpty() {
   // ============================================================
   const insertTask = db.prepare(`
     INSERT INTO tasks (id, code, name, description, department, collab_depts,
-      assignee_id, created_by, start_date, end_date, progress, status, priority, results, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      assignee_id, created_by, start_date, end_date, progress, status, priority, results, notes, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertSubtask = db.prepare(`
-    INSERT INTO subtasks (id, task_id, name, description, assignee_id, start_date, end_date, progress, status, priority, results, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO subtasks (id, task_id, name, description, assignee_id, start_date, end_date, progress, status, priority, results, notes, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertLog = db.prepare(`
@@ -80,13 +80,15 @@ function seedIfEmpty() {
     65, 'in_progress', 'high',
     'Đã hoàn thành migrate module kế toán. Đang xử lý module nhân sự.',
     'Cần phối hợp Phòng Kế toán để test trước go-live.',
+    JSON.stringify(['urgent', 'migration', 'recurring-quarterly']),
     now, now
   );
 
   const s1id = uuidv4();
   insertSubtask.run(s1id, t1id, 'Migrate dữ liệu module Kế toán', '', userIds['nv.it01'],
     shiftDays(-20), shiftDays(5), 80, 'in_progress', 'high',
-    'Đã migrate 15.000 records kế toán, đang kiểm tra tính toàn vẹn.', '', now, now);
+    'Đã migrate 15.000 records kế toán, đang kiểm tra tính toàn vẹn.', '',
+    JSON.stringify(['urgent', 'data-migration']), now, now);
 
   // Daily logs cho s1
   const logs1 = [
@@ -102,10 +104,12 @@ function seedIfEmpty() {
   const s2id = uuidv4();
   insertSubtask.run(s2id, t1id, 'Migrate dữ liệu module Nhân sự', '', userIds['nv.it01'],
     shiftDays(-10), shiftDays(15), 45, 'in_progress', 'high',
-    'Đang viết script migrate, kết nối API ổn định.', '', now, now);
+    'Đang viết script migrate, kết nối API ổn định.', '',
+    JSON.stringify(['urgent', 'data-migration']), now, now);
 
   insertSubtask.run(uuidv4(), t1id, 'Đào tạo người dùng cuối sử dụng ERP mới', '', userIds['nv.it02'],
-    shiftDays(5), shiftDays(20), 0, 'not_started', 'medium', '', '', now, now);
+    shiftDays(5), shiftDays(20), 0, 'not_started', 'medium', '', '',
+    JSON.stringify(['training']), now, now);
 
   // Task 2: Đào tạo kỹ năng mềm
   const t2id = uuidv4();
@@ -115,16 +119,19 @@ function seedIfEmpty() {
     'Phòng Nhân sự', JSON.stringify(['Ban Giám đốc']),
     userIds['tp.ns'], 'Nguyễn Văn Giám đốc',
     shiftDays(-10), shiftDays(30), 40, 'in_progress', 'medium',
-    'Đã chốt giảng viên, đang khảo sát nhu cầu học viên.', '', now, now
+    'Đã chốt giảng viên, đang khảo sát nhu cầu học viên.', '',
+    JSON.stringify(['training', 'recurring-quarterly']), now, now
   );
 
   insertSubtask.run(uuidv4(), t2id, 'Khảo sát nhu cầu học viên', '', userIds['nv.ns01'],
     shiftDays(-10), shiftDays(-2), 100, 'completed', 'medium',
-    'Đã khảo sát 120 nhân viên, thu thập kết quả.', '', now, now);
+    'Đã khảo sát 120 nhân viên, thu thập kết quả.', '',
+    JSON.stringify(['survey']), now, now);
 
   insertSubtask.run(uuidv4(), t2id, 'Liên hệ và chốt giảng viên', '', userIds['nv.ns01'],
     shiftDays(-8), shiftDays(0), 100, 'completed', 'high',
-    'Đã ký hợp đồng với công ty đào tạo ABC.', '', now, now);
+    'Đã ký hợp đồng với công ty đào tạo ABC.', '',
+    JSON.stringify(['vendor']), now, now);
 
   // Task 3: Kiểm toán nội bộ
   insertTask.run(
@@ -133,7 +140,8 @@ function seedIfEmpty() {
     'Phòng Kế toán', JSON.stringify(['Ban Giám đốc']),
     userIds['tp.kt'], 'Nguyễn Văn Giám đốc',
     shiftDays(5), shiftDays(45), 0, 'not_started', 'medium',
-    '', 'Chờ BGĐ phê duyệt kế hoạch kiểm toán.', now, now
+    '', 'Chờ BGĐ phê duyệt kế hoạch kiểm toán.',
+    JSON.stringify(['audit', 'recurring-quarterly']), now, now
   );
 
   console.log('✅ Seed hoàn thành!');

@@ -127,6 +127,7 @@ export interface TaskPayload {
   priority?: string;
   results?: string;
   notes?: string;
+  tags?: string[];
 }
 
 export interface SubTaskPayload {
@@ -140,6 +141,7 @@ export interface SubTaskPayload {
   priority?: string;
   results?: string;
   notes?: string;
+  tags?: string[];
 }
 
 export interface DailyLogPayload {

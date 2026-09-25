@@ -7,7 +7,10 @@ import { state } from './state';
 import { saveCurrentUser } from './storage';
 import { authApi, tasksApi, usersApi, setToken, clearToken, type TaskPayload, type SubTaskPayload, type DailyLogPayload } from './api';
 import { showToast, openModal, closeModal, setText, refreshIcons } from './ui';
-import { ROLE_LABEL, today } from './utils';
+import { ROLE_LABEL, today, normalizeTags } from './utils';
+import { getTags, setTags, resetTags, initAllTagsInputs } from './tagsInput';
+import { renderTimeline, bindTimelineToggle } from './renderTimeline';
+import { setMyTasksMode } from './render';
 import {
   renderDashboard,
   renderProjects,
@@ -41,7 +44,12 @@ export function showApp(): void {
     setText('dashboardGreeting', `Hôm nay ${todayStr}. Chào mừng ${state.currentUser.name}!`);
   }
 
+  // Khởi tạo tags input (một lần)
+  initAllTagsInputs();
+
   applyRolePermissions();
+  bindTimelineToggle();
+  bindMyTasksSubTabs();
   // Tải dữ liệu ban đầu từ API
   void loadInitialData();
   refreshIcons();
@@ -64,6 +72,7 @@ async function loadInitialData(): Promise<void> {
     state.allUsers = users;
 
     populateDeptFilter();
+    updateMyTasksBadge();
     navigateTo('dashboard');
   } catch (err) {
     showToast('Không thể tải dữ liệu từ server. Kiểm tra kết nối.', true);
@@ -78,10 +87,61 @@ async function reloadTasks(): Promise<void> {
   try {
     state.projects = await tasksApi.list();
     navigateTo(state.currentView);
+    updateMyTasksBadge();
   } catch (err) {
     showToast('Lỗi cập nhật dữ liệu', true);
     console.error(err);
   }
+}
+
+/** Đếm số SubTask của user hiện tại mà chưa có daily log hôm nay */
+export function countMyPendingDailyReports(): number {
+  if (!state.currentUser) return 0;
+  const t = today();
+  let count = 0;
+  for (const p of state.projects) {
+    if (!p.subTasks) continue;
+    for (const st of p.subTasks) {
+      if (st.assignee !== state.currentUser.name) continue;
+      if (st.status === 'completed') continue;
+      const has = (st.dailyLogs || []).some((l) => l.date === t);
+      if (!has) count++;
+    }
+  }
+  return count;
+}
+
+/** Cập nhật badge "!" trên nút "Việc của tôi" */
+export function updateMyTasksBadge(): void {
+  const badge = document.getElementById('myTasksBadge');
+  if (!badge) return;
+  const n = countMyPendingDailyReports();
+  if (n > 0) {
+    badge.textContent = String(n);
+    badge.classList.remove('hidden');
+    badge.classList.add('flex');
+  } else {
+    badge.classList.add('hidden');
+    badge.classList.remove('flex');
+  }
+}
+
+/** Bind 1 lần — click sub-tab (Danh sách / Báo cáo hôm nay) */
+let subTabListenersBound = false;
+export function bindMyTasksSubTabs(): void {
+  if (subTabListenersBound) return;
+  subTabListenersBound = true;
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    const btn = target.closest<HTMLElement>('[data-mytasks-mode]');
+    if (!btn) return;
+    const mode = btn.dataset.mytasksMode;
+    if (mode === 'list' || mode === 'daily') {
+      e.preventDefault();
+      setMyTasksMode(mode);
+    }
+  });
 }
 
 export async function handleLogin(): Promise<void> {
@@ -154,7 +214,7 @@ function applyRolePermissions(): void {
 export function navigateTo(view: View): void {
   state.currentView = view;
 
-  (['dashboard', 'projects', 'myTasks', 'reports', 'dailyReport'] as View[]).forEach((v) => {
+  (['dashboard', 'projects', 'myTasks', 'reports', 'timeline'] as View[]).forEach((v) => {
     document.getElementById(`view-${v}`)?.classList.add('hidden');
   });
   document.getElementById(`view-${view}`)?.classList.remove('hidden');
@@ -167,7 +227,7 @@ export function navigateTo(view: View): void {
     case 'projects':     renderProjects();     break;
     case 'myTasks':      renderMyTasks();      break;
     case 'reports':      renderReports();      break;
-    case 'dailyReport':  renderDailyReport();  break;
+    case 'timeline':     renderTimeline();     break;
   }
   refreshIcons();
 }
@@ -183,6 +243,8 @@ export function openProjectModal(id?: string): void {
   document.querySelectorAll<HTMLInputElement>('input[name="collabDept"]').forEach((cb) => {
     cb.checked = false;
   });
+
+  resetTags('fTags');
 
   const idEl = document.getElementById('projectId') as HTMLInputElement | null;
   if (idEl) idEl.value = '';
@@ -222,6 +284,8 @@ export function openProjectModal(id?: string): void {
     document.querySelectorAll<HTMLInputElement>('input[name="collabDept"]').forEach((cb) => {
       cb.checked = collabDepts.includes(cb.value);
     });
+
+    setTags('fTags', p.tags || []);
   } else {
     if (titleEl) titleEl.textContent = 'Tạo công việc mới';
     (document.getElementById('fStartDate') as HTMLInputElement | null)?.value !== undefined &&
@@ -285,7 +349,14 @@ function readProjectForm(): TaskPayload | null {
 
   if (!name) return null;
 
-  return { code, name, description, department, collaboratingDepts, assigneeId: assigneeId || undefined, startDate, endDate, priority, progress, results, status };
+  const tags = normalizeTags(getTags('fTags'));
+
+  return {
+    code, name, description, department, collaboratingDepts,
+    assigneeId: assigneeId || undefined,
+    startDate, endDate, priority, progress, results, status,
+    tags,
+  };
 }
 
 export function handleSaveProject(e: Event): void {
@@ -339,6 +410,8 @@ export function openSubTaskModal(projectId: string, subTaskId?: string): void {
   if (!form) return;
   form.reset();
 
+  resetTags('stTags');
+
   const pidEl = document.getElementById('stProjectId') as HTMLInputElement | null;
   const sidEl = document.getElementById('stSubTaskId') as HTMLInputElement | null;
   if (pidEl) pidEl.value = projectId;
@@ -367,6 +440,8 @@ export function openSubTaskModal(projectId: string, subTaskId?: string): void {
       ((document.getElementById('stPriority') as HTMLSelectElement).value = st.priority || 'medium');
     (document.getElementById('stStatus') as HTMLSelectElement | null) &&
       ((document.getElementById('stStatus') as HTMLSelectElement).value = st.status || 'not_started');
+
+    setTags('stTags', st.tags || []);
   } else {
     if (titleEl) titleEl.textContent = 'Thêm công việc con';
     (document.getElementById('stStartDate') as HTMLInputElement | null) &&
@@ -411,7 +486,8 @@ export function handleSaveSubTask(e: Event): void {
     return;
   }
 
-  const payload: SubTaskPayload = { name, description, assigneeId: assigneeId || undefined, startDate, endDate, priority, status };
+  const tags = normalizeTags(getTags('stTags'));
+  const payload: SubTaskPayload = { name, description, assigneeId: assigneeId || undefined, startDate, endDate, priority, status, tags };
 
   const btn = document.querySelector<HTMLButtonElement>('#subTaskForm button[type="submit"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu...'; }

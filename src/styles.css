@@ -153,7 +153,138 @@
   box-shadow: 0 0 0 2px #6366f1;
 }
 
-/* ===== Animations ===== */
+/* ===== Tags input ===== */
+.tags-input-container .tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  animation: fadeIn 0.15s ease forwards;
+}
+.tags-input-container .tag-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px; height: 14px;
+  border-radius: 9999px;
+  margin-left: 0.125rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.tags-input-container .tag-chip button:hover { opacity: 1; }
+
+/* ===== Gantt ===== */
+.gantt-host {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-height: 70vh;
+}
+.gantt-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  font-size: 12px;
+  color: #334155;
+  min-width: 720px;
+}
+.gantt-header-left {
+  position: sticky; left: 0; z-index: 5;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.gantt-header-right {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.gantt-header-cell {
+  flex: 1 0 0;
+  text-align: center;
+  padding: 6px 0;
+  font-weight: 500;
+  color: #64748b;
+  border-right: 1px solid #f1f5f9;
+}
+.gantt-header-cell.weekend { background: #f8fafc; color: #94a3b8; }
+.gantt-header-cell.today { background: #eef2ff; color: #4f46e5; font-weight: 700; }
+.gantt-header-cell.month-start { border-left: 2px solid #cbd5e1; }
+
+.gantt-row-left {
+  position: sticky; left: 0; z-index: 4;
+  background: white;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #f1f5f9;
+  padding: 6px 10px;
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gantt-row-left:hover { background: #f8fafc; }
+.gantt-row-left.is-sub { padding-left: 28px; color: #475569; font-size: 11.5px; }
+.gantt-row-left .ind { color: #6366f1; }
+
+.gantt-row-right {
+  position: relative;
+  border-bottom: 1px solid #f1f5f9;
+  height: 36px;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(100% / var(--gantt-cols) - 1px),
+    #f1f5f9 calc(100% / var(--gantt-cols) - 1px),
+    #f1f5f9 calc(100% / var(--gantt-cols))
+  );
+}
+.gantt-row-right .today-line {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 3;
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 6px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex; align-items: center;
+  padding: 0 8px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.08);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  z-index: 2;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.gantt-bar:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(15,23,42,0.15); }
+.gantt-bar.is-task { background: linear-gradient(135deg,#3b82f6,#2563eb); }
+.gantt-bar.is-sub  { background: linear-gradient(135deg,#8b5cf6,#6d28d9); height: 18px; top: 9px; }
+.gantt-bar.is-overdue { background: linear-gradient(135deg,#ef4444,#b91c1c); }
+.gantt-bar.is-completed { background: linear-gradient(135deg,#10b981,#047857); }
+.gantt-bar-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: rgba(255,255,255,0.18);
+  pointer-events: none;
+}
+
+/* FullCalendar override cho tone hệ thống */
+.fc { font-size: 12px; }
+.fc .fc-toolbar-title { font-size: 16px; font-weight: 700; color: #0f172a; }
+.fc .fc-button { background: #4f46e5; border: 0; }
+.fc .fc-button:hover { background: #4338ca; }
+.fc .fc-button-primary:not(:disabled).fc-button-active { background: #312e81; }
+.fc-event { cursor: pointer; }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }

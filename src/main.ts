@@ -149,7 +149,7 @@ function handleInput(e: Event): void {
   const id = target.id;
   if (
     state.currentView === 'projects' &&
-    (id === 'filterSearch' || id === 'filterDept' || id === 'filterStatus' || id === 'filterPriority')
+    (id === 'filterSearch' || id === 'filterDept' || id === 'filterStatus' || id === 'filterPriority' || id === 'filterTag')
   ) {
     renderProjects();
   }

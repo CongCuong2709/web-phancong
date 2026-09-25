@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -7,6 +7,10 @@
   <meta name="description" content="Hệ thống phân công và theo dõi công việc nội bộ — 3 cấp: Giám đốc, Trưởng phòng, Nhân viên" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <!-- FullCalendar cho view Lịch -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/vi.global.min.js"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
 
@@ -81,18 +85,18 @@
               <i data-lucide="folder-kanban" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Công việc</span>
             </button>
-            <button data-nav="myTasks" class="nav-btn">
+            <button data-nav="myTasks" id="navMyTasks" class="nav-btn relative">
               <i data-lucide="list-checks" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Việc của tôi</span>
+              <span id="myTasksBadge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-xs font-semibold rounded-full flex items-center justify-center">0</span>
             </button>
             <button data-nav="reports" class="nav-btn">
               <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Báo cáo</span>
             </button>
-            <button data-nav="dailyReport" id="navDailyReport" class="nav-btn relative">
-              <i data-lucide="notebook-pen" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Báo cáo ngày</span>
-              <span id="dailyReportBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">!</span>
+            <button data-nav="timeline" class="nav-btn">
+              <i data-lucide="calendar-clock" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Dòng thời gian</span>
             </button>
             <button data-action="logout" class="nav-btn text-rose-600 hover:bg-rose-50">
               <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -203,7 +207,7 @@
         </div>
 
         <!-- Filters -->
-        <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <div class="lg:col-span-2 relative">
             <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
             <input id="filterSearch" type="text" placeholder="Tìm theo mã, tên, người thực hiện..."
@@ -224,6 +228,9 @@
             <option value="high">Cao</option>
             <option value="medium">Trung bình</option>
             <option value="low">Thấp</option>
+          </select>
+          <select id="filterTag" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+            <option value="">Tất cả tag</option>
           </select>
         </div>
 
@@ -255,11 +262,13 @@
 
       <!-- ============ MY TASKS ============ -->
       <section id="view-myTasks" class="view hidden">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
             <h2 class="text-2xl font-bold text-slate-900">Việc của tôi</h2>
             <p class="text-sm text-slate-500 mt-1">Các công việc được phân công cho bạn</p>
           </div>
+          <!-- Sub-tabs (Danh sách / Báo cáo hôm nay) -->
+          <div id="myTasksTabsMount"></div>
         </div>
 
         <div id="myTasksList" class="grid gap-4"></div>
@@ -296,8 +305,56 @@
         </div>
       </section>
 
-      <!-- ============ DAILY REPORT ============ -->
-      <section id="view-dailyReport" class="view hidden">
+      <!-- ============ TIMELINE (gộp Lịch + Gantt) ============ --><section id="view-timeline" class="view hidden"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6"><div><h2 class="text-2xl font-bold text-slate-900">Dòng thời gian</h2><p class="text-sm text-slate-500 mt-1">Trực quan tiến độ theo ngày / tuần / tháng — chuyển chế độ Lịch ↔ Gantt</p></div><div id="timelineToggleMount"></div></div><div id="timelineContent"></div></section><!-- LEGACY_CALENDAR_HIDDEN --><section id="view-calendar" style="display:none" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Lịch công việc</h2>
+            <p class="text-sm text-slate-500 mt-1">Xem công việc theo ngày / tuần / tháng</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-500">Bao gồm:</label>
+            <label class="flex items-center gap-1 text-sm"><input id="calIncludeTasks" type="checkbox" checked class="rounded"> CV gốc</label>
+            <label class="flex items-center gap-1 text-sm"><input id="calIncludeSubs" type="checkbox" checked class="rounded"> CV con</label>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-3">
+          <div id="calendarHost"></div>
+        </div>
+      </section>
+
+      <!-- LEGACY_GANTT_HIDDEN --><section id="view-gantt" style="display:none" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Sơ đồ Gantt</h2>
+            <p class="text-sm text-slate-500 mt-1">Trực quan tiến độ theo thời gian — CV gốc (header) & CV con (sub-bar)</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="ganttPrev" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium flex items-center gap-1">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i> Trước
+            </button>
+            <button id="ganttToday" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hôm nay</button>
+            <button id="ganttNext" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium flex items-center gap-1">
+              Sau <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+            <select id="ganttRange" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+              <option value="week">Tuần</option>
+              <option value="month" selected>Tháng</option>
+              <option value="quarter">Quý</option>
+            </select>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-3">
+          <div id="ganttHost" class="gantt-host"></div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-blue-500"></span>CV gốc</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-violet-500"></span>CV con</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-rose-500"></span>Quá hạn</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-emerald-500"></span>Hoàn thành</span>
+        </div>
+      </section>
+
+      <!-- ============ DAILY REPORT (staging - ẩn, dùng view-myTasks sub-tab) ============ --><section id="view-dailyReport" style="display:none">
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
@@ -480,6 +537,18 @@
                     class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
         </div>
 
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            <span class="flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i> Tags / Nhãn</span>
+          </label>
+          <div id="fTagsContainer" class="tags-input-container" data-target="fTags">
+            <div id="fTagsChips" class="flex flex-wrap gap-1.5 mb-1.5"></div>
+            <input id="fTags" type="text" placeholder="Gõ tag rồi nhấn Enter hoặc dấu phẩy..."
+                   class="w-full px-2 py-1.5 rounded border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+          </div>
+          <p class="text-xs text-slate-400 mt-1">VD: urgent, audit, recurring, vendor, training</p>
+        </div>
+
         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" data-action="close-project-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
           <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">Lưu công việc</button>
@@ -557,6 +626,17 @@
               <option value="completed">Hoàn thành</option>
               <option value="on_hold">Tạm dừng</option>
             </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            <span class="flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i> Tags / Nhãn</span>
+          </label>
+          <div id="stTagsContainer" class="tags-input-container" data-target="stTags">
+            <div id="stTagsChips" class="flex flex-wrap gap-1.5 mb-1.5"></div>
+            <input id="stTags" type="text" placeholder="Gõ tag rồi nhấn Enter hoặc dấu phẩy..."
+                   class="w-full px-2 py-1.5 rounded border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
           </div>
         </div>
 
@@ -668,3 +748,6 @@
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
+
+
+

@@ -13,9 +13,12 @@ import {
   progressColor,
   computeTaskProgress,
   getTodayLog,
+  tagsBadgesHtml,
 } from './utils';
 import { state } from './state';
 import { setHTML, setText, showElement, hideElement, refreshIcons } from './ui';
+import { renderDailyReport } from './renderDailyReport';
+import { today } from './utils';
 
 // ============================================================
 // Visibility helpers
@@ -404,6 +407,24 @@ export function populateDeptFilter(): void {
   sel.innerHTML =
     '<option value="">Tất cả phòng ban</option>' +
     depts.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  populateTagFilter();
+}
+
+/** Populate dropdown lọc theo tag — lấy từ tất cả task + subtask */
+export function populateTagFilter(): void {
+  const sel = document.getElementById('filterTag') as HTMLSelectElement | null;
+  if (!sel) return;
+  const tagSet = new Set<string>();
+  for (const p of state.projects) {
+    for (const t of p.tags || []) tagSet.add(t);
+    for (const s of p.subTasks || []) for (const t of s.tags || []) tagSet.add(t);
+  }
+  const tags = [...tagSet].sort();
+  const prev = sel.value;
+  sel.innerHTML =
+    '<option value="">Tất cả tag</option>' +
+    tags.map((t) => `<option value="${escapeHtml(t)}">#${escapeHtml(t)}</option>`).join('');
+  if (prev && tags.includes(prev)) sel.value = prev;
 }
 
 function projectTableRowHtml(p: Project): string {
@@ -411,6 +432,7 @@ function projectTableRowHtml(p: Project): string {
   const overdue = isOverdue(p);
   const role: Role | undefined = state.currentUser?.role;
   const hasSubTasks = p.subTasks && p.subTasks.length > 0;
+  const tagBadges = tagsBadgesHtml(p.tags);
 
   return `
     <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.openDetailModal('${p.id}')">
@@ -418,7 +440,10 @@ function projectTableRowHtml(p: Project): string {
       <td class="px-4 py-3">
         <div class="font-medium text-slate-900 line-clamp-2">${escapeHtml(p.name)}</div>
         ${p.description ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(p.description)}</div>` : ''}
-        ${hasSubTasks ? `<span class="badge badge-subtask mt-1">${p.subTasks!.length} CV con</span>` : ''}
+        <div class="flex flex-wrap gap-1 mt-1">
+          ${hasSubTasks ? `<span class="badge badge-subtask">${p.subTasks!.length} CV con</span>` : ''}
+          ${tagBadges}
+        </div>
       </td>
       <td class="px-4 py-3 hidden md:table-cell">
         <div class="text-slate-700">${escapeHtml(p.department)}</div>
@@ -460,16 +485,24 @@ export function renderProjects(): void {
   const deptSel = document.getElementById('filterDept') as HTMLSelectElement | null;
   const statusSel = document.getElementById('filterStatus') as HTMLSelectElement | null;
   const prioritySel = document.getElementById('filterPriority') as HTMLSelectElement | null;
+  const tagSel = document.getElementById('filterTag') as HTMLSelectElement | null;
 
   const search = (searchEl?.value || '').toLowerCase();
   const dept = deptSel?.value || '';
   const status = statusSel?.value || '';
   const priority = prioritySel?.value || '';
+  const tag = tagSel?.value || '';
 
   let list = getVisibleProjects();
   if (dept) list = list.filter((p) => p.department === dept);
   if (status) list = list.filter((p) => p.status === status);
   if (priority) list = list.filter((p) => p.priority === priority);
+  if (tag) {
+    list = list.filter((p) =>
+      (p.tags || []).includes(tag) ||
+      (p.subTasks || []).some((s) => (s.tags || []).includes(tag))
+    );
+  }
   if (search) {
     list = list.filter(
       (p) =>
@@ -612,14 +645,93 @@ function myTaskDirectCardHtml(p: Project): string {
 
 export function renderMyTasks(): void {
   const role = state.currentUser?.role;
+
+  // Tự động chuyển sang "Báo cáo hôm nay" nếu NV có việc chưa báo cáo
+  // và đang ở mode 'list' (default lần đầu)
+  const pendingCount = countPendingDailyReports();
+  if (role === 'employee' && state.myTasksMode === 'list' && pendingCount > 0) {
+    state.myTasksMode = 'daily';
+  }
+
+  paintMyTasksTabs(pendingCount);
+
+  if (state.myTasksMode === 'daily') {
+    renderMyTasksDailyMode();
+  } else {
+    renderMyTasksListMode();
+  }
+  // Cập nhật badge trên navbar "Việc của tôi"
+  updateNavMyTasksBadge(pendingCount);
+  refreshIcons();
+}
+
+/** Cập nhật badge "!" đỏ trên nút navbar Việc của tôi */
+function updateNavMyTasksBadge(count: number): void {
+  const badge = document.getElementById('myTasksBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = String(count);
+    badge.classList.remove('hidden');
+    badge.classList.add('flex');
+  } else {
+    badge.classList.add('hidden');
+    badge.classList.remove('flex');
+  }
+}
+
+/** Đếm số SubTask của NV hiện tại mà chưa có daily log hôm nay */
+function countPendingDailyReports(): number {
+  if (!state.currentUser) return 0;
+  const t = today();
+  let count = 0;
+  for (const { subTask: st } of getMySubTasks()) {
+    if (st.status === 'completed') continue;
+    const has = (st.dailyLogs || []).some((l) => l.date === t);
+    if (!has) count++;
+  }
+  return count;
+}
+
+/** Vẽ sub-tabs (Danh sách / Báo cáo hôm nay) + badge số pending */
+function paintMyTasksTabs(pendingCount: number): void {
+  const mount = document.getElementById('myTasksTabsMount');
+  if (!mount) return;
+  const mode = state.myTasksMode;
+  const role = state.currentUser?.role;
+
+  // Chỉ hiển thị sub-tab "Báo cáo hôm nay" cho employee
+  const showDaily = role === 'employee';
+  const badgeHtml = pendingCount > 0
+    ? `<span class="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-xs font-semibold rounded-full">${pendingCount}</span>`
+    : '';
+
+  mount.innerHTML = `
+    <div class="inline-flex rounded-lg border border-slate-300 bg-slate-50 p-1 text-sm">
+      <button data-mytasks-mode="list"
+              class="px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition
+                     ${mode === 'list' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+        <i data-lucide="list-checks" class="w-4 h-4"></i> Danh sách
+      </button>
+      ${showDaily ? `
+      <button data-mytasks-mode="daily"
+              class="px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition
+                     ${mode === 'daily' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+        <i data-lucide="notebook-pen" class="w-4 h-4"></i> Báo cáo hôm nay
+        ${badgeHtml}
+      </button>` : ''}
+    </div>
+  `;
+  refreshIcons();
+}
+
+/** Sub-mode: Danh sách (gọi logic cũ của renderMyTasks) */
+function renderMyTasksListMode(): void {
+  const role = state.currentUser?.role;
   const el = document.getElementById('myTasksList');
   if (!el) return;
 
   if (role === 'employee') {
-    // Hiển thị SubTask được giao
     const mySubTasks = getMySubTasks();
-
-    // Sắp xếp: quá hạn + ưu tiên cao trước
     mySubTasks.sort((a, b) => {
       const ao = isSubTaskOverdue(a.subTask) ? 0 : 1;
       const bo = isSubTaskOverdue(b.subTask) ? 0 : 1;
@@ -637,7 +749,6 @@ export function renderMyTasks(): void {
       el.innerHTML = active.map(({ project, subTask }) => mySubTaskCardHtml(project, subTask)).join('');
     }
   } else {
-    // Manager / Director: hiển thị Task của phòng mình
     const list = getVisibleProjects()
       .filter((p) => p.status !== 'completed')
       .sort((a, b) => {
@@ -656,8 +767,98 @@ export function renderMyTasks(): void {
       el.innerHTML = list.map(myTaskDirectCardHtml).join('');
     }
   }
+}
 
+/** Sub-mode: Báo cáo hôm nay — dùng lại renderDailyReport nhưng đổ vào #myTasksList */
+function renderMyTasksDailyMode(): void {
+  const listEl = document.getElementById('myTasksList');
+  const emptyEl = document.getElementById('emptyMyTasks');
+  if (listEl) listEl.innerHTML = '';
+  if (emptyEl) hideElement('emptyMyTasks');
+
+  // Reuse logic từ renderDailyReport: gắn nội dung vào 2 vùng chính
+  // renderDailyReport dùng #dailyReportBody / #emptyDailyReport / #dailyReportSummary / #btnSubmitAllReports
+  // Để tránh sửa renderDailyReport, ta clone body sang #myTasksList và ẩn các id kia.
+  renderDailyReport();
+
+  // Sau khi render xong, di chuyển nội dung sang vùng của myTasks
+  const bodySrc = document.getElementById('dailyReportBody');
+  const summarySrc = document.getElementById('dailyReportSummary');
+  const emptySrc = document.getElementById('emptyDailyReport');
+  const submitBtn = document.getElementById('btnSubmitAllReports');
+
+  if (listEl && bodySrc) {
+    // Tạo wrapper
+    let wrapper = document.getElementById('myTasksDailyWrapper');
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.id = 'myTasksDailyWrapper';
+      listEl.appendChild(wrapper);
+    }
+    wrapper.innerHTML = '';
+
+    if (summarySrc) wrapper.appendChild(summarySrc);
+
+    const tableBox = document.createElement('div');
+    tableBox.className = 'bg-white rounded-xl border border-slate-200 overflow-hidden';
+    const tbl = document.createElement('div');
+    tbl.className = 'overflow-x-auto';
+    const table = document.createElement('table');
+    table.className = 'w-full text-sm';
+    table.innerHTML = `
+      <thead class="bg-gradient-to-r from-indigo-50 to-purple-50 text-slate-700 text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left font-semibold w-8"></th>
+          <th class="px-4 py-3 text-left font-semibold">Công việc</th>
+          <th class="px-4 py-3 text-left font-semibold hidden md:table-cell">Dự án</th>
+          <th class="px-4 py-3 text-left font-semibold hidden lg:table-cell w-28">Hạn</th>
+          <th class="px-4 py-3 text-left font-semibold w-28">Tiến độ</th>
+          <th class="px-4 py-3 text-left font-semibold min-w-40">Hôm nay làm gì?</th>
+          <th class="px-4 py-3 text-left font-semibold min-w-36 hidden xl:table-cell">Kết quả</th>
+          <th class="px-4 py-3 text-left font-semibold min-w-32 hidden xl:table-cell">Vướng mắc</th>
+          <th class="px-4 py-3 text-center font-semibold w-24">% Mới</th>
+          <th class="px-4 py-3 text-center font-semibold w-20">Trạng thái</th>
+          <th class="px-4 py-3 text-center font-semibold w-16">Lưu</th>
+        </tr>
+      </thead>`;
+    const tbody = document.createElement('tbody');
+    tbody.id = 'myTasksDailyBody';
+    tbody.className = 'divide-y divide-slate-100';
+    table.appendChild(tbody);
+    tbl.appendChild(table);
+    tableBox.appendChild(tbl);
+    wrapper.appendChild(tableBox);
+
+    // Move rows từ #dailyReportBody sang #myTasksDailyBody
+    if (bodySrc) {
+      while (bodySrc.firstChild) tbody.appendChild(bodySrc.firstChild);
+      // Cập nhật rowId references cho saveAll handler trong dailyReportHandlers
+      // Vì các nút save gọi saveDailyReportRow(rowId) — chúng ta KHÔNG đổi id của input/textarea,
+      // chỉ di chuyển DOM. Các data-task-id, data-sub-id trên tr vẫn dùng đúng.
+    }
+
+    if (emptySrc && !tbody.firstChild) {
+      const e = emptySrc.cloneNode(true) as HTMLElement;
+      e.classList.remove('hidden');
+      wrapper.appendChild(e);
+    }
+
+    if (submitBtn) {
+      // Đưa nút Submit All lên đầu wrapper
+      const headerBtn = submitBtn.cloneNode(true) as HTMLElement;
+      headerBtn.classList.add('mb-3');
+      wrapper.insertBefore(headerBtn, wrapper.firstChild);
+      // Gắn lại onclick
+      headerBtn.onclick = () => window.submitAllDailyReports();
+    }
+  }
   refreshIcons();
+}
+
+/** Handler khi user click sub-tab */
+export function setMyTasksMode(mode: 'list' | 'daily'): void {
+  state.myTasksMode = mode;
+  renderMyTasks();
 }
 
 // ============================================================

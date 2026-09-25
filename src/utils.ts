@@ -117,3 +117,51 @@ export function getTodayLog(st: SubTask): import('./types').DailyLog | null {
   const t = today();
   return st.dailyLogs?.find((l) => l.date === t) ?? null;
 }
+
+// ============================================================
+// Tags — helpers
+// ============================================================
+const TAG_PALETTE = [
+  { bg: '#e0e7ff', fg: '#4338ca' }, // indigo
+  { bg: '#d1fae5', fg: '#047857' }, // emerald
+  { bg: '#fee2e2', fg: '#b91c1c' }, // rose
+  { bg: '#fed7aa', fg: '#c2410c' }, // orange
+  { bg: '#fef3c7', fg: '#b45309' }, // amber
+  { bg: '#ede9fe', fg: '#6d28d9' }, // violet
+  { bg: '#cffafe', fg: '#0e7490' }, // cyan
+  { bg: '#fce7f3', fg: '#9d174d' }, // pink
+];
+
+/** Mã màu ổn định theo tên tag (hash đơn giản) */
+export function tagColor(tag: string): { bg: string; fg: string } {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) | 0;
+  const idx = Math.abs(hash) % TAG_PALETTE.length;
+  return TAG_PALETTE[idx];
+}
+
+/** Chuẩn hoá tag: trim, bỏ rỗng, viết thường, bỏ trùng, giữ thứ tự */
+export function normalizeTags(input: readonly (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of input) {
+    if (raw == null) continue;
+    const t = String(raw).trim().toLowerCase();
+    if (!t) continue;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+/** Render HTML danh sách tag (badge) — escape + auto màu */
+export function tagsBadgesHtml(tags: readonly string[] | undefined): string {
+  if (!tags || !tags.length) return '';
+  return tags
+    .map((t) => {
+      const c = tagColor(t);
+      return `<span class="badge" style="background:${c.bg};color:${c.fg}">#${escapeHtml(t)}</span>`;
+    })
+    .join(' ');
+}

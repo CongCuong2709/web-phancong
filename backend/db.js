@@ -49,6 +49,7 @@ db.exec(`
     priority        TEXT NOT NULL DEFAULT 'medium',
     results         TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
+    tags            TEXT NOT NULL DEFAULT '[]',
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
   );
@@ -66,6 +67,7 @@ db.exec(`
     priority    TEXT NOT NULL DEFAULT 'medium',
     results     TEXT NOT NULL DEFAULT '',
     notes       TEXT NOT NULL DEFAULT '',
+    tags        TEXT NOT NULL DEFAULT '[]',
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
   );
@@ -92,6 +94,13 @@ db.exec(`
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
   );
 `);
+
+// ============================================================
+// Safe migration: thêm cột tags vào DB đã tồn tại (nếu thiếu)
+// SQLite không có IF NOT EXISTS cho ADD COLUMN, nên dùng try/catch.
+// ============================================================
+try { db.exec("ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch {}
+try { db.exec("ALTER TABLE subtasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch {}
 
 // ============================================================
 // Helper: bọc node:sqlite API giống better-sqlite3

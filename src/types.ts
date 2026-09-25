@@ -8,7 +8,13 @@ export type ProjectStatus = 'not_started' | 'in_progress' | 'completed' | 'on_ho
 
 export type Priority = 'low' | 'medium' | 'high';
 
-export type View = 'dashboard' | 'projects' | 'myTasks' | 'reports' | 'dailyReport';
+export type View = 'dashboard' | 'projects' | 'myTasks' | 'reports' | 'timeline';
+
+/** Chế độ xem trong view "Dòng thời gian" (gộp Lịch + Gantt) */
+export type TimelineMode = 'calendar' | 'gantt';
+
+/** Chế độ xem trong view "Việc của tôi" (gộp Danh sách + Báo cáo ngày) */
+export type MyTasksMode = 'list' | 'daily';
 
 
 export interface HistoryEntry {
@@ -45,6 +51,7 @@ export interface SubTask {
   priority: Priority;
   results: string;
   notes: string;
+  tags: string[];           // nhãn tự do (VD: urgent, audit, recurring)
   history: HistoryEntry[];
   dailyLogs: DailyLog[];    // nhật ký hằng ngày
 }
@@ -70,6 +77,7 @@ export interface Project {
   priority: Priority;
   results: string;
   notes: string;
+  tags: string[];                   // nhãn tự do (VD: urgent, audit, recurring)
   history: HistoryEntry[];
   subTasks: SubTask[];              // danh sách công việc con
 }

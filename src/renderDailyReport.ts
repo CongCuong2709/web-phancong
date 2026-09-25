@@ -52,6 +52,7 @@ export function renderDailyReport(): void {
         progress: p.progress,
         status: p.status,
         priority: p.priority,
+        tags: p.tags || [],
         results: p.results,
         notes: p.notes,
         history: p.history,

@@ -54,9 +54,15 @@ function getTasksForUser(user) {
 // ============================================================
 // Serialize task: parse collab_depts JSON + gắn subtasks
 // ============================================================
+function parseJsonArray(value, fallback = []) {
+  if (!value) return fallback;
+  try { const arr = JSON.parse(value); return Array.isArray(arr) ? arr : fallback; }
+  catch { return fallback; }
+}
+
 function serializeTask(t, includeSubtasks = true) {
-  let collaboratingDepts = [];
-  try { collaboratingDepts = JSON.parse(t.collab_depts); } catch {}
+  let collaboratingDepts = parseJsonArray(t.collab_depts, []);
+  let tags = parseJsonArray(t.tags, []);
 
   // Lấy tên assignee
   const assignee = t.assignee_id
@@ -80,6 +86,7 @@ function serializeTask(t, includeSubtasks = true) {
     priority: t.priority,
     results: t.results,
     notes: t.notes,
+    tags,
     createdAt: t.created_at,
     updatedAt: t.updated_at,
     subTasks: [],
@@ -93,6 +100,7 @@ function serializeTask(t, includeSubtasks = true) {
         ? db.prepare('SELECT id, fullname FROM users WHERE id = ?').get(s.assignee_id)
         : null;
       const logs = db.prepare('SELECT * FROM daily_logs WHERE subtask_id = ? ORDER BY log_date DESC').all(s.id);
+      let sTags = parseJsonArray(s.tags, []);
       return {
         id: s.id,
         taskId: s.task_id,
@@ -107,6 +115,7 @@ function serializeTask(t, includeSubtasks = true) {
         priority: s.priority,
         results: s.results,
         notes: s.notes,
+        tags: sTags,
         createdAt: s.created_at,
         updatedAt: s.updated_at,
         history: [],
@@ -157,7 +166,7 @@ router.get('/:id', (req, res) => {
 router.post('/', requireRole('admin', 'director', 'manager'), (req, res) => {
   const {
     code, name, description, department, collaboratingDepts,
-    assigneeId, startDate, endDate, priority, notes,
+    assigneeId, startDate, endDate, priority, notes, tags,
   } = req.body;
 
   if (!name?.trim()) return res.status(400).json({ error: 'Tên công việc là bắt buộc' });
@@ -172,11 +181,12 @@ router.post('/', requireRole('admin', 'director', 'manager'), (req, res) => {
   const id = uuidv4();
   const now = new Date().toISOString();
   const dept = department?.trim() || req.user.department;
+  const tagList = Array.isArray(tags) ? tags.filter((t) => typeof t === 'string' && t.trim()) : [];
 
   db.prepare(`
     INSERT INTO tasks (id, code, name, description, department, collab_depts,
-      assignee_id, created_by, start_date, end_date, priority, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      assignee_id, created_by, start_date, end_date, priority, notes, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, taskCode, name.trim(), description?.trim() || '',
     dept,
@@ -185,6 +195,7 @@ router.post('/', requireRole('admin', 'director', 'manager'), (req, res) => {
     req.user.fullname,
     startDate || '', endDate || '',
     priority || 'medium', notes?.trim() || '',
+    JSON.stringify(tagList),
     now, now
   );
 
@@ -211,7 +222,7 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
 
   const {
     name, description, department, collaboratingDepts,
-    assigneeId, startDate, endDate, progress, status, priority, results, notes,
+    assigneeId, startDate, endDate, progress, status, priority, results, notes, tags,
   } = req.body;
 
   const now = new Date().toISOString();
@@ -229,6 +240,7 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
       priority        = COALESCE(?, priority),
       results         = COALESCE(?, results),
       notes           = COALESCE(?, notes),
+      tags            = COALESCE(?, tags),
       updated_at      = ?
     WHERE id = ?
   `).run(
@@ -244,6 +256,7 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
     priority || null,
     results?.trim() ?? null,
     notes?.trim() ?? null,
+    tags !== undefined ? JSON.stringify(Array.isArray(tags) ? tags : []) : null,
     now,
     req.params.id
   );
@@ -286,18 +299,20 @@ router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (r
     return res.status(403).json({ error: 'Không có quyền thêm công việc con vào task này' });
   }
 
-  const { name, description, assigneeId, startDate, endDate, priority, notes } = req.body;
+  const { name, description, assigneeId, startDate, endDate, priority, notes, tags } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Tên công việc con là bắt buộc' });
 
   const id = uuidv4();
   const now = new Date().toISOString();
+  const tagList = Array.isArray(tags) ? tags.filter((t) => typeof t === 'string' && t.trim()) : [];
 
   db.prepare(`
-    INSERT INTO subtasks (id, task_id, name, description, assignee_id, start_date, end_date, priority, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO subtasks (id, task_id, name, description, assignee_id, start_date, end_date, priority, notes, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, req.params.taskId, name.trim(), description?.trim() || '',
     assigneeId || null, startDate || '', endDate || '',
-    priority || 'medium', notes?.trim() || '', now, now);
+    priority || 'medium', notes?.trim() || '',
+    JSON.stringify(tagList), now, now);
 
   // Recalc task progress
   recalcTaskProgress(req.params.taskId);
@@ -314,6 +329,7 @@ router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (r
   res.status(201).json({
     ...newSub,
     assignee: assignee?.fullname || '',
+    tags: tagList,
     dailyLogs: [],
     history: [],
   });
@@ -329,7 +345,7 @@ router.put('/:taskId/subtasks/:subId', (req, res) => {
     return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc con này' });
   }
 
-  const { name, description, assigneeId, startDate, endDate, progress, status, priority, results, notes } = req.body;
+  const { name, description, assigneeId, startDate, endDate, progress, status, priority, results, notes, tags } = req.body;
   const now = new Date().toISOString();
 
   db.prepare(`
@@ -344,6 +360,7 @@ router.put('/:taskId/subtasks/:subId', (req, res) => {
       priority    = COALESCE(?, priority),
       results     = COALESCE(?, results),
       notes       = COALESCE(?, notes),
+      tags        = COALESCE(?, tags),
       updated_at  = ?
     WHERE id = ?
   `).run(
@@ -354,6 +371,7 @@ router.put('/:taskId/subtasks/:subId', (req, res) => {
     progress !== undefined ? Number(progress) : null,
     status || null, priority || null,
     results?.trim() ?? null, notes?.trim() ?? null,
+    tags !== undefined ? JSON.stringify(Array.isArray(tags) ? tags : []) : null,
     now, req.params.subId
   );
 
@@ -365,7 +383,9 @@ router.put('/:taskId/subtasks/:subId', (req, res) => {
     ? db.prepare('SELECT fullname FROM users WHERE id = ?').get(updated.assignee_id)
     : null;
 
-  res.json({ ...updated, assignee: assigneeUser?.fullname || '' });
+  let updatedTags = [];
+  try { updatedTags = JSON.parse(updated.tags || '[]'); } catch {}
+  res.json({ ...updated, assignee: assigneeUser?.fullname || '', tags: updatedTags });
 });
 
 // DELETE /api/tasks/:taskId/subtasks/:subId
