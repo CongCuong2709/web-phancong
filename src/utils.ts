@@ -23,6 +23,7 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
+  admin: 'Quản trị',
   director: 'Ban Giám đốc',
   manager: 'Trưởng phòng',
   employee: 'Nhân viên',

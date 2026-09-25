@@ -8,7 +8,8 @@ export type ProjectStatus = 'not_started' | 'in_progress' | 'completed' | 'on_ho
 
 export type Priority = 'low' | 'medium' | 'high';
 
-export type View = 'dashboard' | 'projects' | 'myTasks' | 'reports';
+export type View = 'dashboard' | 'projects' | 'myTasks' | 'reports' | 'dailyReport';
+
 
 export interface HistoryEntry {
   at: string;       // ISO 8601 date-time

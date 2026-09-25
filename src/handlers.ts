@@ -16,6 +16,8 @@ import {
   populateDeptFilter,
   renderDetailBody,
 } from './render';
+import { renderDailyReport } from './renderDailyReport';
+
 
 // ============================================================
 // Auth — show / hide login & app screens
@@ -152,7 +154,7 @@ function applyRolePermissions(): void {
 export function navigateTo(view: View): void {
   state.currentView = view;
 
-  (['dashboard', 'projects', 'myTasks', 'reports'] as View[]).forEach((v) => {
+  (['dashboard', 'projects', 'myTasks', 'reports', 'dailyReport'] as View[]).forEach((v) => {
     document.getElementById(`view-${v}`)?.classList.add('hidden');
   });
   document.getElementById(`view-${view}`)?.classList.remove('hidden');
@@ -161,10 +163,11 @@ export function navigateTo(view: View): void {
   document.querySelector<HTMLButtonElement>(`[data-nav="${view}"]`)?.classList.add('active');
 
   switch (view) {
-    case 'dashboard': renderDashboard(); break;
-    case 'projects':  renderProjects();  break;
-    case 'myTasks':   renderMyTasks();   break;
-    case 'reports':   renderReports();   break;
+    case 'dashboard':    renderDashboard();    break;
+    case 'projects':     renderProjects();     break;
+    case 'myTasks':      renderMyTasks();      break;
+    case 'reports':      renderReports();      break;
+    case 'dailyReport':  renderDailyReport();  break;
   }
   refreshIcons();
 }

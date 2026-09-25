@@ -8,7 +8,9 @@ import { loadCurrentUser } from './storage';
 import { getToken, authApi, setToken } from './api';
 import { setupModalBackdropClose, setupEscapeClose, refreshIcons } from './ui';
 import * as H from './handlers';
+import * as DR from './dailyReportHandlers';
 import { renderProjects } from './render';
+
 
 import type { View, CurrentUser, Role } from './types';
 import { saveCurrentUser } from './storage';
@@ -37,8 +39,13 @@ declare global {
     handleSaveProgress: (e: Event) => void;
     openDetailModal: (id: string) => void;
     closeDetailModal: () => void;
+    // Daily Report tab
+    toggleDailyReportRow: (rowId: string) => void;
+    saveDailyReportRow: (taskId: string, subId: string, rowId: string) => void;
+    submitAllDailyReports: () => void;
   }
 }
+
 
 window.handleLogin    = () => { void H.handleLogin(); };
 window.handleLogout   = () => H.handleLogout();
@@ -64,6 +71,12 @@ window.handleSaveProgress = (e: Event) => H.handleSaveProgress(e);
 
 window.openDetailModal  = (id: string) => H.openDetailModal(id);
 window.closeDetailModal = () => H.closeDetailModal();
+
+// Daily Report handlers
+window.toggleDailyReportRow   = (rowId: string) => DR.toggleDailyReportRow(rowId);
+window.saveDailyReportRow     = (taskId: string, subId: string, rowId: string) => DR.saveDailyReportRow(taskId, subId, rowId);
+window.submitAllDailyReports  = () => DR.submitAllDailyReports();
+
 
 // ============================================================
 // Event delegation

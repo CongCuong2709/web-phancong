@@ -89,6 +89,11 @@
               <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Báo cáo</span>
             </button>
+            <button data-nav="dailyReport" id="navDailyReport" class="nav-btn relative">
+              <i data-lucide="notebook-pen" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Báo cáo ngày</span>
+              <span id="dailyReportBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">!</span>
+            </button>
             <button data-action="logout" class="nav-btn text-rose-600 hover:bg-rose-50">
               <i data-lucide="log-out" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Đăng xuất</span>
@@ -289,6 +294,59 @@
             <div id="deptProgressChart" class="space-y-3"></div>
           </div>
         </div>
+      </section>
+
+      <!-- ============ DAILY REPORT ============ -->
+      <section id="view-dailyReport" class="view hidden">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">Báo cáo hôm nay</h2>
+            <p class="text-sm text-slate-500 mt-1" id="dailyReportDate">—</p>
+          </div>
+          <button id="btnSubmitAllReports"
+            onclick="window.submitAllDailyReports()"
+            class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium transition shadow-sm">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            Gửi toàn bộ báo cáo
+          </button>
+        </div>
+
+        <!-- Summary bar -->
+        <div id="dailyReportSummary" class="mb-4"></div>
+
+        <!-- Table view (default) -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm" id="dailyReportTable">
+              <thead class="bg-gradient-to-r from-indigo-50 to-purple-50 text-slate-700 text-xs">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold w-8"></th>
+                  <th class="px-4 py-3 text-left font-semibold">Công việc</th>
+                  <th class="px-4 py-3 text-left font-semibold hidden md:table-cell">Dự án</th>
+                  <th class="px-4 py-3 text-left font-semibold hidden lg:table-cell w-28">Hạn</th>
+                  <th class="px-4 py-3 text-left font-semibold w-28">Tiến độ</th>
+                  <th class="px-4 py-3 text-left font-semibold min-w-40">Hôm nay làm gì?</th>
+                  <th class="px-4 py-3 text-left font-semibold min-w-36 hidden xl:table-cell">Kết quả</th>
+                  <th class="px-4 py-3 text-left font-semibold min-w-32 hidden xl:table-cell">Vướng mắc</th>
+                  <th class="px-4 py-3 text-center font-semibold w-24">% Mới</th>
+                  <th class="px-4 py-3 text-center font-semibold w-20">Trạng thái</th>
+                  <th class="px-4 py-3 text-center font-semibold w-16">Lưu</th>
+                </tr>
+              </thead>
+              <tbody id="dailyReportBody" class="divide-y divide-slate-100">
+              </tbody>
+            </table>
+          </div>
+          <div id="emptyDailyReport" class="hidden p-12 text-center">
+            <i data-lucide="party-popper" class="w-12 h-12 mx-auto mb-3 text-emerald-400"></i>
+            <p class="text-slate-600 font-medium">Tuyệt vời! Bạn đã báo cáo xong tất cả công việc hôm nay.</p>
+            <p class="text-slate-400 text-sm mt-1">Hoặc bạn chưa được giao công việc nào.</p>
+          </div>
+        </div>
+
+        <!-- Completed today section -->
+        <div id="dailyReportDone" class="mt-6"></div>
       </section>
 
     </main>
