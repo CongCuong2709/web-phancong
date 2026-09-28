@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // TypeScript types & interfaces
 // ============================================================
 
@@ -36,10 +36,10 @@ export interface DailyLog {
   createdAt: string;      // ISO timestamp
 }
 
-/** Công việc con — Trưởng phòng tạo & giao cho Nhân viên */
+/** Đầu việc — Trưởng phòng tạo & giao cho Nhân viên */
 export interface SubTask {
   id: string;
-  taskId?: string;          // task cha (từ backend)
+  taskId?: string;          // hạng mục công việc (từ backend)
   name: string;
   description: string;
   assigneeId?: string;      // user id người thực hiện
@@ -79,7 +79,9 @@ export interface Project {
   notes: string;
   tags: string[];                   // nhãn tự do (VD: urgent, audit, recurring)
   history: HistoryEntry[];
-  subTasks: SubTask[];              // danh sách công việc con
+  subTasks: SubTask[];              // danh sách đầu việc
+  createdAt?: string;              // ISO timestamp (set bởi backend serialize)
+  updatedAt?: string;
 }
 
 export interface CurrentUser {
@@ -102,3 +104,4 @@ export interface DeptProgress {
   sum: number;
   count: number;
 }
+

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // renderTimeline.ts — Orchestrator cho view "Dòng thời gian"
 // Gộp Lịch (FullCalendar) + Gantt (CSS thuần) trong 1 view.
 // User chuyển chế độ bằng toggle Lịch / Gantt trong header.
@@ -51,7 +51,7 @@ export function renderTimeline(): void {
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <label class="flex items-center gap-2"><input id="calIncludeTasks" type="checkbox" checked class="rounded"> Bao gồm CV gốc</label>
-        <label class="flex items-center gap-2"><input id="calIncludeSubs" type="checkbox" checked class="rounded"> Bao gồm CV con</label>
+        <label class="flex items-center gap-2"><input id="calIncludeSubs" type="checkbox" checked class="rounded"> Bao gồm đầu việc</label>
         <span class="flex items-center gap-1.5 ml-2"><span class="inline-block w-3 h-3 rounded bg-slate-400"></span>Chưa bắt đầu</span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-blue-500"></span>Đang thực hiện</span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-emerald-500"></span>Hoàn thành</span>
@@ -83,7 +83,7 @@ export function renderTimeline(): void {
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-blue-500"></span>CV gốc</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-violet-500"></span>CV con</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-violet-500"></span>đầu việc</span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-rose-500"></span>Quá hạn</span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-emerald-500"></span>Hoàn thành</span>
       </div>

@@ -144,6 +144,8 @@ export interface SubTaskPayload {
   results?: string;
   notes?: string;
   tags?: string[];
+  /** Chỉ dùng khi tạo SubTask qua project modal — không bắt buộc */
+  parentTaskId?: never;
 }
 
 export interface DailyLogPayload {

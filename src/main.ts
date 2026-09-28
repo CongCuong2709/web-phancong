@@ -180,6 +180,23 @@ function attachGlobalListeners(): void {
   document.addEventListener('input', handleInput);
 }
 
+/** Auto-resize textarea + cập nhật char counter (nếu có <span data-counter-for="...">) */
+function attachAutoResize(): void {
+  const autosize = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+    const counterId = el.dataset.counterFor;
+    if (counterId) {
+      const counter = document.getElementById(counterId);
+      if (counter) counter.textContent = `${el.value.length} ký tự`;
+    }
+  };
+  document.querySelectorAll<HTMLTextAreaElement>('textarea[data-autosize]').forEach((el) => {
+    autosize(el);
+    el.addEventListener('input', () => autosize(el));
+  });
+}
+
 // ============================================================
 // Boot
 // ============================================================
@@ -187,6 +204,7 @@ async function init(): Promise<void> {
   setupModalBackdropClose();
   setupEscapeClose();
   attachGlobalListeners();
+  attachAutoResize();
   refreshIcons();
 
   // Kiểm tra token + session còn hợp lệ không

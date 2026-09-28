@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // renderCalendar.ts — View Lịch dùng FullCalendar (CDN)
 // ============================================================
 import type { Project, SubTask } from './types';
@@ -121,7 +121,7 @@ export function renderCalendar(): void {
       const match = /^sub:([^:]+):(.+)$/.exec(id);
       if (match) {
         const projectId = match[1];
-        // Mở modal chi tiết của task cha, có sẵn subtask trong danh sách
+        // Mở modal chi tiết của hạng mục công việc, có sẵn subtask trong danh sách
         window.openDetailModal(projectId);
       } else if (id.startsWith('task:')) {
         const projectId = id.slice(5);

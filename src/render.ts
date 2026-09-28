@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Render functions — build HTML strings + push to DOM
 // ============================================================
 import type { Project, SubTask, Role } from './types';
@@ -14,6 +14,7 @@ import {
   computeTaskProgress,
   getTodayLog,
   tagsBadgesHtml,
+  isRecentlyCreated,
 } from './utils';
 import { state } from './state';
 import { setHTML, setText, showElement, hideElement, refreshIcons } from './ui';
@@ -45,11 +46,10 @@ export function getVisibleProjects(): Project[] {
     );
   }
 
-  // employee — thấy Task thuộc (các) phòng mình + SubTask giao cho mình
+  // employee — chỉ thấy task được giao TRỰC TIẾP cho mình
+  // (subTask của mình HOẶC task direct assigned)
+  // KHÔNG hiển thị task trong cùng phòng mà không liên quan đến mình
   return state.projects.filter((p) => {
-    const inMyDept = userDepts.includes(p.department) ||
-      (p.collaboratingDepts || []).some((d) => userDepts.includes(d));
-    if (!inMyDept) return false;
     if (p.subTasks && p.subTasks.length > 0) {
       return p.subTasks.some((st) => st.assignee === name);
     }
@@ -113,7 +113,7 @@ function renderDashboardDirector(): void {
           </div>
         </div>
         <p class="text-2xl font-bold text-slate-900">${allSubTasks.length}</p>
-        <p class="text-sm text-slate-500 mt-1">Công việc con</p>
+        <p class="text-sm text-slate-500 mt-1">Đầu việc</p>
       </div>`;
   }
 
@@ -228,7 +228,7 @@ function renderDashboardManager(): void {
             ${progressBarHtml(avg)}
           </div>`;
         }).join('')
-      : `<p class="text-sm text-slate-400 text-center py-4">Chưa có công việc con nào</p>`;
+      : `<p class="text-sm text-slate-400 text-center py-4">Chưa có đầu việc nào</p>`;
 
     // Change label
     const deptStatsTitle = document.getElementById('deptStatsTitle');
@@ -351,7 +351,7 @@ function projectRowHtml(p: Project): string {
           <span class="font-mono text-xs font-semibold text-indigo-600">${escapeHtml(p.code)}</span>
           <span class="badge badge-${p.status}">${STATUS_LABEL[p.status]}</span>
           ${overdue ? `<span class="badge badge-overdue">Quá hạn</span>` : ''}
-          ${hasSubTasks ? `<span class="badge badge-subtask">${p.subTasks!.length} CV con</span>` : ''}
+          ${hasSubTasks ? `<span class="badge badge-subtask">${p.subTasks!.length} đầu việc</span>` : ''}
         </div>
         <p class="font-medium text-slate-900 truncate">${escapeHtml(p.name)}</p>
         <p class="text-xs text-slate-500 truncate">${escapeHtml(p.assignee)} • ${escapeHtml(p.department)} • Hạn: ${formatDate(p.endDate)}</p>
@@ -407,19 +407,21 @@ export function renderDashboard(): void {
 export function populateDeptFilter(): void {
   const sel = document.getElementById('filterDept');
   if (!sel) return;
-  const depts = Array.from(new Set(state.projects.map((p) => p.department))).sort();
+  // Chỉ liệt kê phòng ban có task mà user HIỆN TẠI được thấy
+  const visible = getVisibleProjects();
+  const depts = Array.from(new Set(visible.map((p) => p.department))).sort();
   sel.innerHTML =
     '<option value="">Tất cả phòng ban</option>' +
     depts.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
   populateTagFilter();
 }
 
-/** Populate dropdown lọc theo tag — lấy từ tất cả task + subtask */
+/** Populate dropdown lọc theo tag — chỉ lấy từ task mà user hiện tại thấy */
 export function populateTagFilter(): void {
   const sel = document.getElementById('filterTag') as HTMLSelectElement | null;
   if (!sel) return;
   const tagSet = new Set<string>();
-  for (const p of state.projects) {
+  for (const p of getVisibleProjects()) {
     for (const t of p.tags || []) tagSet.add(t);
     for (const s of p.subTasks || []) for (const t of s.tags || []) tagSet.add(t);
   }
@@ -438,6 +440,17 @@ function projectTableRowHtml(p: Project): string {
   const hasSubTasks = p.subTasks && p.subTasks.length > 0;
   const tagBadges = tagsBadgesHtml(p.tags);
 
+  // Badge "Chưa phân rã Đầu việc" cho task mới tạo (≤ 7 ngày) chưa có SubTask nào
+  // Trừ task đang "Chưa bắt đầu" hoặc đã hoàn thành (không nhắc nữa)
+  const showUndecompBadge =
+    !hasSubTasks &&
+    isRecentlyCreated(p.createdAt, 7) &&
+    p.status !== 'completed' &&
+    p.status !== 'not_started';
+  const undecompBadge = showUndecompBadge
+    ? `<span class="badge badge-warn" title="Task gần đây chưa được phân rã thành SubTask">⚠ Chưa phân rã</span>`
+    : '';
+
   return `
     <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.openDetailModal('${p.id}')">
       <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">${escapeHtml(p.code)}</td>
@@ -445,7 +458,8 @@ function projectTableRowHtml(p: Project): string {
         <div class="font-medium text-slate-900 line-clamp-2">${escapeHtml(p.name)}</div>
         ${p.description ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(p.description)}</div>` : ''}
         <div class="flex flex-wrap gap-1 mt-1">
-          ${hasSubTasks ? `<span class="badge badge-subtask">${p.subTasks!.length} CV con</span>` : ''}
+          ${hasSubTasks ? `<span class="badge badge-subtask">${p.subTasks!.length} đầu việc</span>` : ''}
+          ${undecompBadge}
           ${tagBadges}
         </div>
       </td>
@@ -598,7 +612,7 @@ function mySubTaskCardHtml(project: Project, st: SubTask): string {
   `;
 }
 
-// Card cho task không có SubTask (nhân viên là assignee trực tiếp)
+// Card cho Hạng mục không có Đầu việc (nhân viên là assignee trực tiếp)
 function myTaskDirectCardHtml(p: Project): string {
   const pct = computeTaskProgress(p);
   const overdue = isOverdue(p);
@@ -963,9 +977,9 @@ function subTaskListHtml(p: Project): string {
   if (!p.subTasks || !p.subTasks.length) {
     return canManage
       ? `<div class="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center">
-          <p class="text-sm text-slate-400 mb-2">Chưa có công việc con nào</p>
+          <p class="text-sm text-slate-400 mb-2">Chưa có đầu việc nào</p>
           <button onclick="window.openSubTaskModal('${p.id}')" class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i> Thêm công việc con
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Thêm đầu việc
           </button>
         </div>`
       : '';
@@ -1028,7 +1042,7 @@ function subTaskListHtml(p: Project): string {
       }).join('')}
       ${canManage ? `
         <button onclick="window.openSubTaskModal('${p.id}')" class="w-full border-2 border-dashed border-slate-200 rounded-lg py-2 text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition flex items-center justify-center gap-1">
-          <i data-lucide="plus" class="w-4 h-4"></i> Thêm công việc con
+          <i data-lucide="plus" class="w-4 h-4"></i> Thêm đầu việc
         </button>` : ''}
     </div>
   `;
@@ -1082,7 +1096,7 @@ export function renderDetailBody(p: Project): void {
     </div>
 
     <div>
-      <h4 class="text-xs font-semibold text-slate-500 uppercase mb-1">Tiến độ tổng ${p.subTasks && p.subTasks.length > 0 ? '(tính từ CV con)' : ''}</h4>
+      <h4 class="text-xs font-semibold text-slate-500 uppercase mb-1">Tiến độ tổng ${p.subTasks && p.subTasks.length > 0 ? '(tính từ đầu việc)' : ''}</h4>
       <div class="flex items-center gap-3">
         ${progressBarHtml(pct)}
         <span class="font-bold text-slate-900">${pct}%</span>
@@ -1093,7 +1107,7 @@ export function renderDetailBody(p: Project): void {
     ${p.subTasks !== undefined ? `
     <div>
       <div class="flex items-center justify-between mb-2">
-        <h4 class="text-xs font-semibold text-slate-500 uppercase">Công việc con (${p.subTasks.length})</h4>
+        <h4 class="text-xs font-semibold text-slate-500 uppercase">Đầu việc (${p.subTasks.length})</h4>
       </div>
       ${subTaskListHtml(p)}
     </div>` : ''}
@@ -1143,9 +1157,12 @@ export function renderDetailBody(p: Project): void {
         : `<button onclick="window.closeDetailModal(); window.openProjectModal('${p.id}');" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
             <i data-lucide="pencil" class="w-4 h-4"></i> Sửa công việc
           </button>
-          <button onclick="window.openSubTaskModal('${p.id}')" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i> Thêm CV con
-          </button>
+          ${role !== 'director' ? `<button onclick="window.openSubTaskModal('${p.id}')" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Thêm đầu việc
+          </button>` : `
+          <button disabled title="BGĐ không giao SubTask trực tiếp — hãy giao Hạng mục công việc cho Trưởng phòng" class="flex items-center gap-2 bg-slate-200 text-slate-400 px-4 py-2 rounded-lg font-medium text-sm cursor-not-allowed">
+            <i data-lucide="lock" class="w-4 h-4"></i> Thêm đầu việc (BGĐ)
+          </button>`}
           <button onclick="window.confirmDelete('${p.id}'); window.closeDetailModal();" class="flex items-center gap-2 bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
             <i data-lucide="trash-2" class="w-4 h-4"></i> Xóa
           </button>`}
@@ -1156,3 +1173,5 @@ export function renderDetailBody(p: Project): void {
 
   refreshIcons();
 }
+
+

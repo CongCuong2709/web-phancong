@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Event handlers — auth, CRUD, navigation, modal flows
 // Phiên bản v3: dùng backend API thay localStorage
 // ============================================================
@@ -7,7 +7,7 @@ import { state } from './state';
 import { saveCurrentUser } from './storage';
 import { authApi, tasksApi, usersApi, setToken, clearToken, type TaskPayload, type SubTaskPayload, type DailyLogPayload } from './api';
 import { showToast, openModal, closeModal, setText, refreshIcons } from './ui';
-import { ROLE_LABEL, today, normalizeTags } from './utils';
+import { ROLE_LABEL, today, normalizeTags, escapeHtml } from './utils';
 import { getTags, setTags, resetTags, initAllTagsInputs } from './tagsInput';
 import { renderTimeline, bindTimelineToggle } from './renderTimeline';
 import { setMyTasksMode } from './render';
@@ -218,6 +218,14 @@ function applyRolePermissions(): void {
   if (adminNavBtn) {
     adminNavBtn.style.display = isAdmin ? '' : 'none';
   }
+
+  // "Việc của tôi" chỉ hiển thị với manager + employee
+  // BGĐ/Admin chỉ giao việc chứ không "nhận việc của tôi" riêng
+  const myTasksNavBtn = document.querySelector<HTMLButtonElement>('[data-nav="myTasks"]');
+  if (myTasksNavBtn) {
+    const showMyTasks = role === 'manager' || role === 'employee';
+    myTasksNavBtn.style.display = showMyTasks ? '' : 'none';
+  }
 }
 
 // ============================================================
@@ -259,6 +267,10 @@ export function openProjectModal(id?: string): void {
 
   resetTags('fTags');
 
+  // Reset parent task (chỉ dùng khi tạo mới, không dùng khi edit)
+  const parentSel = document.getElementById('fParentTask') as HTMLSelectElement | null;
+  if (parentSel) parentSel.value = '';
+
   const idEl = document.getElementById('projectId') as HTMLInputElement | null;
   if (idEl) idEl.value = '';
 
@@ -292,6 +304,10 @@ export function openProjectModal(id?: string): void {
     (document.getElementById('fStatus') as HTMLSelectElement | null)?.value !== undefined &&
       ((document.getElementById('fStatus') as HTMLSelectElement).value = p.status || 'not_started');
     if (idEl) idEl.value = p.id;
+    // Modal title: "Sửa: [Code] Tên"
+    if (titleEl) titleEl.textContent = `Sửa: [${p.code}] ${p.name}`;
+    // Hiện "Kết quả thực hiện" khi edit
+    document.getElementById('fResultsWrapper')?.classList.remove('hidden');
 
     const collabDepts = p.collaboratingDepts || [];
     document.querySelectorAll<HTMLInputElement>('input[name="collabDept"]').forEach((cb) => {
@@ -301,6 +317,8 @@ export function openProjectModal(id?: string): void {
     setTags('fTags', p.tags || []);
   } else {
     if (titleEl) titleEl.textContent = 'Tạo công việc mới';
+    // Ẩn "Kết quả thực hiện" khi tạo mới (chưa có kết quả)
+    document.getElementById('fResultsWrapper')?.classList.add('hidden');
     (document.getElementById('fStartDate') as HTMLInputElement | null)?.value !== undefined &&
       ((document.getElementById('fStartDate') as HTMLInputElement).value = today());
     const nextNo = String(state.projects.length + 1).padStart(3, '0');
@@ -310,36 +328,324 @@ export function openProjectModal(id?: string): void {
 
   // Populate assignee dropdown từ danh sách users
   populateAssigneeDropdown('fAssigneeId');
+  populateDeptSelectInForm();
+  populateCollabCheckboxes();
+  populateParentTaskSelect();
+  populateTagSuggestions();
+  autoFillDeptFromAssignee();
+  // Validation realtime
+  attachFormGuards();
+  // Auto-suggest mã mới (nếu không phải edit)
+  if (!id) suggestNextCode();
+
+  // Gợi ý theo vai trò (BGĐ vs TP)
+  const hintEl = document.getElementById('projectRoleHint');
+  if (hintEl && state.currentUser) {
+    const role = state.currentUser.role;
+    if (role === 'director') {
+      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> BGĐ nên tạo Hạng mục công việc lớn, giao cho Trưởng phòng để họ phân rã thành SubTask cho Nhân viên (tránh giao vi mô).`;
+      hintEl.classList.remove('hidden');
+    } else if (role === 'manager') {
+      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> Sau khi tạo, bạn nên phân rã thành các SubĐầu việc và giao cho Nhân viên trong phòng (≥ 1 SubTask, trừ việc nhỏ 1 người làm).`;
+      hintEl.classList.remove('hidden');
+    } else {
+      hintEl.classList.add('hidden');
+    }
+  }
 
   openModal('projectModal');
   refreshIcons();
 }
 
 export function closeProjectModal(): void {
+  // Confirm nếu form có dữ liệu đang nhập
+  const nameEl = document.getElementById('fName') as HTMLInputElement | null;
+  if (nameEl?.value?.trim() && !window.confirm('Form đang có dữ liệu chưa lưu. Đóng cửa sổ?')) {
+    return;
+  }
   closeModal('projectModal');
 }
 
-function populateAssigneeDropdown(selectId: string, deptFilter?: string): void {
+/**
+ * Dropdown "Giao cho (Trưởng phòng)" cho task CHA.
+ * - BGĐ: chỉ thấy manager (TP) - không giao cho BGĐ khác, không tự giao
+ * - Admin: thấy tất cả manager + director (trừ self)
+ * - Manager: chỉ thấy manager + director trong (các) phòng của mình (trừ self)
+ * Tránh: BGĐ tự giao cho mình; TP giao cho TP khác phòng ban.
+ */
+function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void {
   const el = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!el) return;
   const current = el.value;
-  const users = deptFilter
-    ? state.allUsers.filter(u => u.department === deptFilter && (u.role === 'manager' || u.role === 'director'))
-    : state.allUsers.filter(u => u.role === 'manager' || u.role === 'director');
+  const me = state.currentUser;
+  if (!me) return;
+
+  const myDepts = getMyDeptList(me);
+
+  // BGĐ: chỉ giao cho Trưởng phòng (role=manager); không giao cho BGĐ khác
+  // Admin: tất cả manager + director (trừ self)
+  // Manager: manager + director trong cùng phòng (trừ self)
+  let users = state.allUsers.filter((u) => u.id !== me.id);
+
+  if (me.role === 'director') {
+    users = users.filter((u) => u.role === 'manager');
+  } else if (me.role === 'admin') {
+    users = users.filter((u) => u.role === 'manager' || u.role === 'director');
+  } else if (me.role === 'manager') {
+    users = users.filter(
+      (u) => (u.role === 'manager' || u.role === 'director') &&
+      (() => {
+        const ud = (u.departments && u.departments.length) ? u.departments : [u.department].filter(Boolean);
+        return ud.some((d) => myDepts.includes(d));
+      })()
+    );
+  } else {
+    // NV không nên vào đây, fallback an toàn: chỉ manager trong phòng mình
+    users = users.filter((u) => u.role === 'manager');
+  }
 
   el.innerHTML = '<option value="">— Chọn người nhận —</option>' +
     users.map(u => `<option value="${u.id}">${u.fullname} (${u.department})</option>`).join('');
-  if (current) el.value = current;
+  if (current && users.some((u) => u.id === current)) el.value = current;
 }
 
+/**
+ * Dropdown "Giao cho (Nhân viên)" cho SUBTASK.
+ * - BGĐ/Admin: thấy tất cả employee + manager (chọn người thực hiện)
+ * - Manager/Employee: chỉ thấy người trong (các) phòng mình, trừ chính mình
+ */
 function populateEmployeeDropdown(selectId: string): void {
   const el = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!el) return;
   const current = el.value;
-  const users = state.allUsers.filter(u => u.role === 'employee' || u.role === 'manager');
+  const me = state.currentUser;
+  if (!me) return;
+
+  const myDepts = getMyDeptList(me);
+
+  let users = state.allUsers.filter((u) =>
+    (u.role === 'employee' || u.role === 'manager') && u.id !== me.id
+  );
+
+  if (me.role === 'manager' || me.role === 'employee') {
+    // TP / NV chỉ thấy đồng nghiệp cùng phòng
+    users = users.filter((u) => {
+      const ud = (u.departments && u.departments.length) ? u.departments : [u.department].filter(Boolean);
+      return ud.some((d) => myDepts.includes(d));
+    });
+  }
+
   el.innerHTML = '<option value="">— Chọn nhân viên —</option>' +
     users.map(u => `<option value="${u.id}">${u.fullname} (${u.department})</option>`).join('');
-  if (current) el.value = current;
+  if (current && users.some((u) => u.id === current)) el.value = current;
+}
+
+/** Helper: lấy danh sách phòng của user hiện tại (ưu tiên departments[], fallback department) */
+function getMyDeptList(me: { departments?: string[]; department: string }): string[] {
+  if (me.departments && me.departments.length) return me.departments;
+  return me.department ? [me.department] : [];
+}
+
+/**
+ * Populate dropdown "Phòng ban chủ trì" trong form tạo/sửa task.
+ * - BGĐ/Admin: thấy tất cả phòng ban có trong hệ thống
+ * - Manager: chỉ thấy các phòng mà mình thuộc
+ * Dữ liệu lấy từ state.departments (load qua API /api/users/departments).
+ */
+function populateDeptSelectInForm(): void {
+  const sel = document.getElementById('fDept') as HTMLSelectElement | null;
+  if (!sel) return;
+  const me = state.currentUser;
+  if (!me) return;
+
+  const allDepts = state.departments && state.departments.length
+    ? state.departments
+    : ['Ban Giám đốc']; // fallback tối thiểu
+
+  let allowed: string[];
+  if (me.role === 'admin' || me.role === 'director') {
+    allowed = allDepts;
+  } else {
+    // Manager (và NV nếu lỡ vào đây): chỉ phòng của mình
+    const myDepts = getMyDeptList(me);
+    allowed = myDepts.filter((d) => allDepts.includes(d));
+    if (!allowed.length) allowed = allDepts; // fallback hiếm gặp
+  }
+  const prev = sel.value;
+  sel.innerHTML = allowed.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  if (prev && allowed.includes(prev)) sel.value = prev;
+}
+
+/**
+ * Populate checkbox group "Phòng phối hợp thêm" - dùng state.departments (động theo DB)
+ */
+function populateCollabCheckboxes(): void {
+  const wrap = document.getElementById('collabDeptContainer');
+  if (!wrap) return;
+  const me = state.currentUser;
+  if (!me) return;
+  const allDepts = state.departments && state.departments.length
+    ? state.departments
+    : [];
+  const myDept = me.department || '';
+  // Loại trừ phòng chủ trì của mình ra khỏi collab (logic nghiệp vụ: collab ≠ primary)
+  const filtered = allDepts.filter((d) => d && d !== myDept);
+  wrap.innerHTML = filtered
+    .map((d) => `
+      <label>
+        <input type="checkbox" name="collabDept" value="${escapeHtml(d)}" class="w-4 h-4 rounded text-indigo-600" />
+        <span>${escapeHtml(d)}</span>
+      </label>`)
+    .join('');
+}
+
+/**
+ * Auto-fill "Phòng ban chủ trì" khi user chọn Assignee (TP).
+ * Nếu TP có nhiều phòng → lấy phòng chính.
+ */
+function autoFillDeptFromAssignee(): void {
+  const sel = document.getElementById('fAssigneeId') as HTMLSelectElement | null;
+  const deptSel = document.getElementById('fDept') as HTMLSelectElement | null;
+  if (!sel || !deptSel) return;
+  sel.onchange = () => {
+    const assigneeId = sel.value;
+    if (!assigneeId) return;
+    const assignee = state.allUsers.find((u) => u.id === assigneeId);
+    if (!assignee) return;
+    // Ưu tiên: departments[0] (primary), fallback department
+    const primaryDept = (assignee.departments && assignee.departments[0])
+      || assignee.department;
+    if (primaryDept && deptSel.querySelector(`option[value="${primaryDept}"]`)) {
+      deptSel.value = primaryDept;
+    }
+  };
+}
+
+/**
+ * Auto-suggest mã tiếp theo khi tạo task mới: "DAxxx" với số lượng + 1.
+ */
+function suggestNextCode(): void {
+  const codeInput = document.getElementById('fCode') as HTMLInputElement | null;
+  if (!codeInput || codeInput.value) return;
+  const count = state.projects.length;
+  const next = `DA${String(count + 1).padStart(3, '0')}`;
+  codeInput.placeholder = `VD: ${next} (để trống để tự sinh)`;
+}
+
+/**
+ * Gắn 1 lần: validate realtime endDate>=startDate + status↔progress
+ */
+let formGuardsBound = false;
+function attachFormGuards(): void {
+  if (formGuardsBound) return;
+  formGuardsBound = true;
+
+  const startEl = document.getElementById('fStartDate') as HTMLInputElement | null;
+  const endEl = document.getElementById('fEndDate') as HTMLInputElement | null;
+  const statusEl = document.getElementById('fStatus') as HTMLSelectElement | null;
+  const progressEl = document.getElementById('fProgress') as HTMLInputElement | null;
+  const warnEl = document.getElementById('projectFormWarn');
+
+  const showWarn = (msg: string) => {
+    if (!warnEl) return;
+    warnEl.textContent = msg;
+    warnEl.classList.remove('hidden');
+  };
+  const clearWarn = () => {
+    if (!warnEl) return;
+    warnEl.textContent = '';
+    warnEl.classList.add('hidden');
+  };
+
+  const check = () => {
+    clearWarn();
+    if (startEl?.value && endEl?.value) {
+      if (new Date(endEl.value) < new Date(startEl.value)) {
+        showWarn('⚠ Hạn xong phải >= ngày bắt đầu.');
+        return;
+      }
+    }
+    if (statusEl && progressEl) {
+      const s = statusEl.value;
+      const p = Number(progressEl.value || 0);
+      if (s === 'completed' && p < 100) {
+        showWarn('⚠ Trạng thái "Hoàn thành" yêu cầu tiến độ = 100%.');
+        return;
+      }
+      if (s === 'not_started' && p > 0) {
+        showWarn('⚠ Trạng thái "Chưa bắt đầu" yêu cầu tiến độ = 0%.');
+        return;
+      }
+    }
+  };
+
+  startEl?.addEventListener('change', check);
+  endEl?.addEventListener('change', check);
+  statusEl?.addEventListener('change', check);
+  progressEl?.addEventListener('input', check);
+}
+
+/**
+ * Tạo <datalist> gợi ý tag từ tất cả tag đã dùng trong tasks.
+ */
+function populateTagSuggestions(): void {
+  const tagSet = new Set<string>();
+  for (const p of state.projects) {
+    for (const t of p.tags || []) tagSet.add(t);
+    for (const s of p.subTasks || []) for (const t of s.tags || []) tagSet.add(t);
+  }
+  const sorted = [...tagSet].sort();
+  let dl = document.getElementById('tagSuggestionsList') as HTMLDataListElement | null;
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'tagSuggestionsList';
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = sorted.map((t) => `<option value="${escapeHtml(t)}"></option>`).join('');
+  const tagInput = document.getElementById('fTags') as HTMLInputElement | null;
+  const stTagInput = document.getElementById('stTags') as HTMLInputElement | null;
+  if (tagInput) tagInput.setAttribute('list', 'tagSuggestionsList');
+  if (stTagInput) stTagInput.setAttribute('list', 'tagSuggestionsList');
+}
+
+/**
+ * Populate dropdown "Gắn vào Hạng mục công việc" trong form Tạo công việc.
+ * - BGĐ: KHÔNG hiển thị (BGĐ không tạo Đầu việc trực tiếp)
+ * - Manager/Admin: hiện tất cả task mà user có thể quản lý trong (các) phòng của mình
+ */
+function populateParentTaskSelect(): void {
+  const sel = document.getElementById('fParentTask') as HTMLSelectElement | null;
+  const wrapper = document.getElementById('fParentTaskWrapper');
+  const me = state.currentUser;
+  if (!sel || !wrapper || !me) return;
+
+  // BGĐ không được gắn hạng mục công việc (vì sẽ trở thành Đầu việc — BGĐ bị cấm)
+  if (me.role === 'director') {
+    wrapper.classList.add('hidden');
+    sel.disabled = true;
+    return;
+  }
+  wrapper.classList.remove('hidden');
+  sel.disabled = false;
+
+  const myDepts = getMyDeptList(me);
+  const allVisible = state.projects.filter((p) => {
+    // Chỉ task chưa hoàn thành, có thể gắn SubTask
+    if (p.status === 'completed') return false;
+    if (me.role === 'admin') return true;
+    // Manager: task trong phòng mình
+    return myDepts.includes(p.department) ||
+      (p.collaboratingDepts || []).some((d) => myDepts.includes(d));
+  });
+
+  const prev = sel.value;
+  sel.innerHTML =
+    '<option value="">— Để tạo Task độc lập —</option>' +
+    allVisible.map((p) => {
+      const subCount = p.subTasks?.length || 0;
+      return `<option value="${p.id}">[${escapeHtml(p.code)}] ${escapeHtml(p.name)} (${subCount} đầu việc)</option>`;
+    }).join('');
+  if (prev && allVisible.some((p) => p.id === prev)) sel.value = prev;
 }
 
 function readProjectForm(): TaskPayload | null {
@@ -375,23 +681,59 @@ function readProjectForm(): TaskPayload | null {
 export function handleSaveProject(e: Event): void {
   e.preventDefault();
   const id = (document.getElementById('projectId') as HTMLInputElement | null)?.value ?? '';
+  // Nếu user chọn "Gắn vào Hạng mục công việc" → tạo Đầu việc thay vì Hạng mục gốc
+  const parentTaskId = (document.getElementById('fParentTask') as HTMLSelectElement | null)?.value ?? '';
   const data = readProjectForm();
   if (!data) {
     showToast('Vui lòng nhập tên công việc', true);
     return;
   }
 
+  // Phát hiện trùng tên task trong cùng phòng
+  if (!id) {
+    const dup = state.projects.find((p) =>
+      p.department === data.department &&
+      p.name.trim().toLowerCase() === data.name.trim().toLowerCase()
+    );
+    if (dup && !window.confirm(
+      `Đã có task "${dup.code} — ${dup.name}" trong phòng "${data.department}".\n\n` +
+      `Bạn vẫn muốn tạo thêm task trùng tên?`
+    )) {
+      // User hủy → focus lại ô tên
+      (document.getElementById('fName') as HTMLInputElement | null)?.focus();
+      return;
+    }
+  }
+
   const btn = document.querySelector<HTMLButtonElement>('#projectForm button[type="submit"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Đang lưu...'; }
 
-  const save = id
-    ? tasksApi.update(id, data)
-    : tasksApi.create(data);
+  // Nếu đang tạo mới + có parent → tạo Đầu việc thuộc Hạng mục đó
+  const promise: Promise<Project | SubTask> =
+    id
+      ? tasksApi.update(id, data)
+      : parentTaskId
+        ? tasksApi.createSubTask(parentTaskId, data)
+        : tasksApi.create(data);
 
-  save
-    .then(() => {
+  promise
+    .then((createdOrUpdated) => {
       showToast(id ? 'Đã cập nhật công việc' : 'Đã tạo công việc mới');
       closeProjectModal();
+      // Hỏi TP/Admin phân rã Đầu việc ngay sau khi tạo Hạng mục công việc MỚI (chỉ khi tạo root task, không phải SubTask)
+      const me = state.currentUser;
+      if (!id && !parentTaskId && createdOrUpdated && me && (me.role === 'manager' || me.role === 'admin')) {
+        const taskCode = (createdOrUpdated as Project).code || '';
+        setTimeout(() => {
+          if (window.confirm(
+            `Task "${taskCode} — ${(createdOrUpdated as Project).name}" đã tạo.\n\n` +
+            `Bạn có muốn phân rã thành các Đầu việc và giao cho Nhân viên ngay bây giờ không?\n` +
+            `(Khuyến nghị cho Trưởng phòng theo quy trình chuẩn)`
+          )) {
+            openSubTaskModal((createdOrUpdated as Project).id);
+          }
+        }, 200);
+      }
       return reloadTasks();
     })
     .catch((err: Error) => {
@@ -434,11 +776,17 @@ export function openSubTaskModal(projectId: string, subTaskId?: string): void {
   if (!p) return;
 
   const titleEl = document.getElementById('subTaskModalTitle');
+  const contextEl = document.getElementById('subTaskContext');
+  // Context: "Thuộc: [Code] Tên — Phòng XYZ"
+  if (contextEl) {
+    contextEl.textContent = `Thuộc: [${p.code}] ${p.name} • ${p.department}`;
+    contextEl.classList.remove('hidden');
+  }
 
   if (subTaskId) {
     const st = p.subTasks?.find((s) => s.id === subTaskId);
     if (!st) return;
-    if (titleEl) titleEl.textContent = 'Sửa công việc con';
+    if (titleEl) titleEl.textContent = `Sửa: ${st.name}`;
     if (sidEl) sidEl.value = st.id;
 
     (document.getElementById('stName') as HTMLInputElement | null) &&
@@ -453,10 +801,14 @@ export function openSubTaskModal(projectId: string, subTaskId?: string): void {
       ((document.getElementById('stPriority') as HTMLSelectElement).value = st.priority || 'medium');
     (document.getElementById('stStatus') as HTMLSelectElement | null) &&
       ((document.getElementById('stStatus') as HTMLSelectElement).value = st.status || 'not_started');
+    (document.getElementById('stProgress') as HTMLInputElement | null) &&
+      ((document.getElementById('stProgress') as HTMLInputElement).value = String(st.progress || 0));
+    (document.getElementById('stResults') as HTMLTextAreaElement | null) &&
+      ((document.getElementById('stResults') as HTMLTextAreaElement).value = st.results || '');
 
     setTags('stTags', st.tags || []);
   } else {
-    if (titleEl) titleEl.textContent = 'Thêm công việc con';
+    if (titleEl) titleEl.textContent = 'Thêm đầu việc';
     (document.getElementById('stStartDate') as HTMLInputElement | null) &&
       ((document.getElementById('stStartDate') as HTMLInputElement).value = today());
     (document.getElementById('stEndDate') as HTMLInputElement | null) &&
@@ -478,6 +830,10 @@ export function openSubTaskModal(projectId: string, subTaskId?: string): void {
 }
 
 export function closeSubTaskModal(): void {
+  const nameEl = document.getElementById('stName') as HTMLInputElement | null;
+  if (nameEl?.value?.trim() && !window.confirm('Form đang có dữ liệu chưa lưu. Đóng cửa sổ?')) {
+    return;
+  }
   closeModal('subTaskModal');
 }
 
@@ -495,12 +851,17 @@ export function handleSaveSubTask(e: Event): void {
   const status = ((document.getElementById('stStatus') as HTMLSelectElement | null)?.value as SubTask['status']) || 'not_started';
 
   if (!name) {
-    showToast('Vui lòng nhập tên công việc con', true);
+    showToast('Vui lòng nhập tên đầu việc', true);
     return;
   }
 
   const tags = normalizeTags(getTags('stTags'));
-  const payload: SubTaskPayload = { name, description, assigneeId: assigneeId || undefined, startDate, endDate, priority, status, tags };
+  const progress = Number((document.getElementById('stProgress') as HTMLInputElement | null)?.value ?? 0);
+  const results = ((document.getElementById('stResults') as HTMLTextAreaElement | null)?.value ?? '').trim();
+  const payload: SubTaskPayload = {
+    name, description, assigneeId: assigneeId || undefined,
+    startDate, endDate, priority, status, tags, progress, results,
+  };
 
   const btn = document.querySelector<HTMLButtonElement>('#subTaskForm button[type="submit"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu...'; }
@@ -511,7 +872,7 @@ export function handleSaveSubTask(e: Event): void {
 
   save
     .then(() => {
-      showToast(subTaskId ? 'Đã cập nhật công việc con' : 'Đã thêm công việc con');
+      showToast(subTaskId ? 'Đã cập nhật đầu việc' : 'Đã thêm đầu việc');
       closeSubTaskModal();
       return reloadTasks();
     })
@@ -534,11 +895,11 @@ export function confirmDeleteSubTask(projectId: string, subTaskId: string): void
   if (!p) return;
   const st = p.subTasks?.find((s) => s.id === subTaskId);
   if (!st) return;
-  if (!window.confirm(`Xóa công việc con "${st.name}"?\nHành động này không thể hoàn tác.`)) return;
+  if (!window.confirm(`Xóa đầu việc "${st.name}"?\nHành động này không thể hoàn tác.`)) return;
 
   tasksApi.deleteSubTask(projectId, subTaskId)
     .then(() => {
-      showToast('Đã xóa công việc con');
+      showToast('Đã xóa đầu việc');
       return reloadTasks();
     })
     .then(() => {
@@ -633,7 +994,7 @@ export function handleSaveDailyLog(e: Event): void {
     };
     savePromise = tasksApi.addLog(projectId, subTaskId, logPayload);
   } else {
-    // Cập nhật trực tiếp Task nếu không có subtask
+    // Cập nhật trực tiếp Hạng mục nếu không có đầu việc
     savePromise = tasksApi.update(projectId, { progress: newProgress, results: result });
   }
 
@@ -669,3 +1030,6 @@ export function openDetailModal(id: string): void {
 export function closeDetailModal(): void {
   closeModal('detailModal');
 }
+
+
+

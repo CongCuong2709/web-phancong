@@ -143,6 +143,15 @@ export function tagColor(tag: string): { bg: string; fg: string } {
   return TAG_PALETTE[idx];
 }
 
+/** Trả về true nếu task vừa tạo trong vòng `days` ngày gần đây. Dùng để gắn badge "Mới" / "Chưa phân rã". */
+export function isRecentlyCreated(createdAt: string | undefined | null, days = 7): boolean {
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return false;
+  const diff = Date.now() - created;
+  return diff >= 0 && diff <= days * 24 * 60 * 60 * 1000;
+}
+
 /** Chuẩn hoá tag: trim, bỏ rỗng, viết thường, bỏ trùng, giữ thứ tự */
 export function normalizeTags(input: readonly (string | null | undefined)[]): string[] {
   const seen = new Set<string>();

@@ -14,7 +14,7 @@ interface AppState {
   /** Danh sách phòng ban (lấy từ API /users/departments) */
   departments: string[];
   /** Danh sách user active (để dropdown giao việc) */
-  allUsers: Array<{ id: string; fullname: string; role: string; department: string }>;
+  allUsers: Array<{ id: string; fullname: string; role: string; department: string; departments?: string[]; active?: number; username?: string }>;
   /** Loading state khi fetch API */
   loading: boolean;
 }
