@@ -9,6 +9,7 @@ import { getToken, authApi, setToken } from './api';
 import { setupModalBackdropClose, setupEscapeClose, refreshIcons } from './ui';
 import * as H from './handlers';
 import * as DR from './dailyReportHandlers';
+import * as ADM from './renderAdminUsers';
 import { renderProjects } from './render';
 
 
@@ -43,6 +44,10 @@ declare global {
     toggleDailyReportRow: (rowId: string) => void;
     saveDailyReportRow: (taskId: string, subId: string, rowId: string) => void;
     submitAllDailyReports: () => void;
+    // Admin: Quản lý người dùng
+    openUserModal: (id?: string) => void;
+    confirmDeleteUser: (id: string) => void;
+    resetUserPassword: (id: string) => void;
   }
 }
 
@@ -77,6 +82,11 @@ window.toggleDailyReportRow   = (rowId: string) => DR.toggleDailyReportRow(rowId
 window.saveDailyReportRow     = (taskId: string, subId: string, rowId: string) => DR.saveDailyReportRow(taskId, subId, rowId);
 window.submitAllDailyReports  = () => DR.submitAllDailyReports();
 
+// Admin handlers
+window.openUserModal        = (id?: string) => ADM.openUserModal(id);
+window.confirmDeleteUser    = (id: string) => { void ADM.confirmDeleteUser(id); };
+window.resetUserPassword    = (id: string) => { void ADM.resetUserPassword(id); };
+
 
 // ============================================================
 // Event delegation
@@ -95,6 +105,7 @@ const ACTION_MAP: Record<string, ActionHandler> = {
   'close-subtask-modal':  () => H.closeSubTaskModal(),
   'close-dailylog-modal': () => H.closeDailyLogModal(),
   'close-detail-modal':   () => H.closeDetailModal(),
+  'close-user-modal':     () => ADM.closeUserModal(),
 };
 
 function handleClick(e: MouseEvent): void {
@@ -140,6 +151,9 @@ function handleSubmit(e: SubmitEvent): void {
   } else if (form.id === 'dailyLogForm') {
     e.preventDefault();
     H.handleSaveDailyLog(e);
+  } else if (form.id === 'userForm') {
+    e.preventDefault();
+    void ADM.handleSaveUser(e);
   }
 }
 
@@ -189,6 +203,7 @@ async function init(): Promise<void> {
         role: me.role as Role,
         name: me.fullname,
         department: me.department,
+        departments: me.departments ?? [me.department].filter(Boolean),
         loginAt: savedUser.loginAt,
       };
       state.currentUser = currentUser;

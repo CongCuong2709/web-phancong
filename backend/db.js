@@ -25,12 +25,23 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id          TEXT PRIMARY KEY,
     username    TEXT UNIQUE NOT NULL,
+    email       TEXT NOT NULL DEFAULT '',
     password    TEXT NOT NULL,
     fullname    TEXT NOT NULL,
     role        TEXT NOT NULL CHECK(role IN ('admin','director','manager','employee')),
     department  TEXT NOT NULL DEFAULT '',
     active      INTEGER NOT NULL DEFAULT 1,
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+  );
+
+  -- Bảng junction: 1 user thuộc nhiều phòng ban
+  -- (user_id, department) là phòng ban user có quyền truy cập (full CRUD)
+  -- is_primary = 1 nếu là phòng "chính" (hiển thị mặc định)
+  CREATE TABLE IF NOT EXISTS user_departments (
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    department  TEXT NOT NULL,
+    is_primary  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, department)
   );
 
   CREATE TABLE IF NOT EXISTS tasks (
@@ -101,6 +112,17 @@ db.exec(`
 // ============================================================
 try { db.exec("ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE subtasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''"); } catch {}
+
+// ============================================================
+// Safe migration: chuyển users.department cũ vào user_departments
+// (chỉ chạy 1 lần — sau đó trigger bằng unique để tránh duplicate)
+// ============================================================
+try {
+  const oldUsers = db.prepare('SELECT id, department FROM users WHERE department != ""').all();
+  const insertUd = db.prepare('INSERT OR IGNORE INTO user_departments (user_id, department, is_primary) VALUES (?, ?, 1)');
+  for (const u of oldUsers) insertUd.run(u.id, u.department);
+} catch {}
 
 // ============================================================
 // Helper: bọc node:sqlite API giống better-sqlite3

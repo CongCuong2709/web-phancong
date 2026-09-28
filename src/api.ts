@@ -68,7 +68,8 @@ export interface LoginResponse {
     username: string;
     fullname: string;
     role: string;
-    department: string;
+    department: string;     // primary (back-compat)
+    departments: string[];  // tất cả phòng user thuộc
   };
 }
 
@@ -91,6 +92,7 @@ export interface UserRecord {
   fullname: string;
   role: string;
   department: string;
+  departments: string[];
   active: number;
   created_at: string;
 }
@@ -100,9 +102,9 @@ export const usersApi = {
   byDepartment: (dept?: string) =>
     get<UserRecord[]>(dept ? `/users/by-department?dept=${encodeURIComponent(dept)}` : '/users/by-department'),
   departments: () => get<string[]>('/users/departments'),
-  create: (data: { username: string; password: string; fullname: string; role: string; department: string }) =>
+  create: (data: { username: string; password: string; fullname: string; role: string; department?: string; departments?: string[] }) =>
     post<UserRecord>('/users', data),
-  update: (id: string, data: Partial<UserRecord & { active: boolean }>) =>
+  update: (id: string, data: Partial<{ fullname: string; role: string; department: string; departments: string[]; active: boolean }>) =>
     put<{ message: string }>(`/users/${id}`, data),
   resetPassword: (id: string, newPassword: string) =>
     post<{ message: string }>(`/users/${id}/reset-password`, { newPassword }),

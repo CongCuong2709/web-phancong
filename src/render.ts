@@ -26,26 +26,30 @@ import { today } from './utils';
 
 /** Tasks visible theo role:
  * - employee: SubTask được giao cho mình (cross-project)
- * - manager: Task của phòng mình hoặc mình là assignee
+ * - manager: Task của (các) phòng mình hoặc mình là assignee
  * - director: tất cả Task
  */
 export function getVisibleProjects(): Project[] {
   if (!state.currentUser) return [];
-  const { role, name, department } = state.currentUser;
+  const { role, name, department, departments } = state.currentUser;
+  const userDepts = departments && departments.length ? departments : (department ? [department] : []);
 
   if (role === 'director') return state.projects;
 
   if (role === 'manager') {
     return state.projects.filter(
       (p) =>
-        p.department === department ||
+        userDepts.includes(p.department) ||
         p.assignee === name ||
-        (p.collaboratingDepts || []).includes(department),
+        (p.collaboratingDepts || []).some((d) => userDepts.includes(d)),
     );
   }
 
-  // employee — chỉ thấy Task trực tiếp giao cho mình (khi không có SubTask)
+  // employee — thấy Task thuộc (các) phòng mình + SubTask giao cho mình
   return state.projects.filter((p) => {
+    const inMyDept = userDepts.includes(p.department) ||
+      (p.collaboratingDepts || []).some((d) => userDepts.includes(d));
+    if (!inMyDept) return false;
     if (p.subTasks && p.subTasks.length > 0) {
       return p.subTasks.some((st) => st.assignee === name);
     }

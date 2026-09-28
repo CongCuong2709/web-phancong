@@ -77,15 +77,20 @@ interface Project {
 }
 ```
 
-## 👤 Tài khoản mẫu
+## 👤 Tài khoản mặc định (Hệ thống mới từ dữ liệu cũ)
 
-| Vai trò       | Tên đề xuất              | Phòng ban        | Quyền                                          |
-|---------------|--------------------------|------------------|------------------------------------------------|
-| Giám đốc      | Nguyễn Văn Giám đốc       | Ban Giám đốc     | Xem tất cả, tạo / sửa / xóa dự án            |
-| Trưởng phòng  | Trần Thị Trưởng phòng     | Phòng IT         | Tạo / sửa / xóa dự án                          |
-| Nhân viên     | Lê Văn Nhân viên         | Phòng IT         | Chỉ xem & cập nhật tiến độ công việc được giao |
+Mật khẩu chung cho tất cả tài khoản: `123456` (Riêng Admin: `admin123`).
 
-> **Mẹo**: Đăng nhập bằng `Lê Văn Nhân viên` / `Phòng IT` để thấy ngay 2 dự án mẫu đã giao cho nhân viên này trong mục **Việc của tôi**.
+- **Quản trị**: `admin`
+- **Ban Giám đốc**: `tienanhkinhbac@gmail.com`, `tag.dndung@gmail.com`, `cuong0169c@gmail.com`
+- **Trưởng phòng**: `81nham@gmail.com` (HCNS), `damvanluan1403@gmail.com` (HCNS), `huyduongsishust5059@gmail.com` (HCNS & Kế toán), `caocuong17479@gmail.com` (Kế toán & Thu mua), `bintemp05@gmail.com` (Thu mua)
+- **Nhân viên**:
+  - `tag.hcns8@gmail.com` (Đỗ Thị Ánh Nguyệt — HCNS)
+  - `nhinguyen.tag1@gmail.com` (Nguyễn Thảo Nhi — HCNS)
+  - `tag.thitruong@gmail.com` (Bùi Quang Tú — Thu mua)
+  - `tag.ketoan1@gmail.com` (Nguyễn Thị Hằng — Kế toán)
+
+> **Ghi chú**: Đăng nhập bằng tên tài khoản dạng full email hoặc username rút gọn (VD: `tag.hcns8` hay `tag.hcns8@gmail.com` đều được).
 
 ## 🧩 Tính năng
 

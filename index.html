@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -51,11 +51,11 @@
       </form>
 
       <div class="mt-6 p-4 bg-slate-50 rounded-lg text-xs text-slate-600 space-y-1">
-        <p class="font-semibold mb-1">📋 Tài khoản mẫu (demo):</p>
-        <p>🏢 Giám đốc: <strong>giamdoc</strong> / giamdoc123</p>
-        <p>👔 Trưởng phòng IT: <strong>tp.it</strong> / 123456</p>
-        <p>🧑 Nhân viên: <strong>nv.it01</strong> / 123456</p>
-        <p class="text-slate-400 mt-2">(Admin xóa khối này sau khi deploy)</p>
+        <p class="font-semibold mb-1">📋 Tài khoản hệ thống (Mật khẩu: 123456):</p>
+        <p>🏢 BGĐ: <strong>tienanhkinhbac@gmail.com</strong>, <strong>tag.dndung@gmail.com</strong></p>
+        <p>👔 Trưởng phòng: <strong>81nham@gmail.com</strong>, <strong>caocuong17479@gmail.com</strong></p>
+        <p>🧑 Nhân viên: <strong>tag.hcns8@gmail.com</strong>, <strong>tag.thitruong@gmail.com</strong></p>
+        <p>👑 Admin: <strong>admin</strong> / admin123</p>
       </div>
     </div>
   </div>
@@ -97,6 +97,10 @@
             <button data-nav="timeline" class="nav-btn">
               <i data-lucide="calendar-clock" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Dòng thời gian</span>
+            </button>
+            <button data-nav="adminUsers" id="navAdminUsers" class="nav-btn" style="display:none">
+              <i data-lucide="users-cog" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Quản lý NV</span>
             </button>
             <button data-action="logout" class="nav-btn text-rose-600 hover:bg-rose-50">
               <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -406,7 +410,7 @@
         <div id="dailyReportDone" class="mt-6"></div>
       </section>
 
-    </main>
+<!-- ============ ADMIN: QUAN LY NGUOI DUNG ============ --><section id="view-adminUsers" class="view hidden"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6"><div><h2 class="text-2xl font-bold text-slate-900">Quản lý người dùng</h2><p class="text-sm text-slate-500 mt-1">Thêm / sửa / khóa tài khoản; gán nhiều phòng ban cho mỗi user</p></div><button onclick="window.openUserModal()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition"><i data-lucide="user-plus" class="w-4 h-4"></i> Thêm người dùng</button></div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-600 text-xs uppercase"><tr><th class="px-4 py-3 text-left font-medium">Username</th><th class="px-4 py-3 text-left font-medium">Họ tên</th><th class="px-4 py-3 text-left font-medium">Vai trò</th><th class="px-4 py-3 text-left font-medium">Phòng ban</th><th class="px-4 py-3 text-center font-medium">Trạng thái</th><th class="px-4 py-3 text-right font-medium">Thao tác</th></tr></thead><tbody id="userTableBody" class="divide-y divide-slate-100"></tbody></table></div></div></section><!-- ============ USER MODAL ============ --><div id="userModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm"><div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10"><h3 id="userModalTitle" class="text-lg font-bold text-slate-900">Thêm người dùng</h3><button data-action="close-user-modal" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button></div><form id="userForm" class="p-6 space-y-4"><input type="hidden" id="ufId" /><div><label class="block text-sm font-medium text-slate-700 mb-1">Tên đăng nhập <span class="text-rose-500">*</span></label><input id="ufUsername" required type="text" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" /></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Mật khẩu <span id="ufPwHint" class="text-slate-400 text-xs font-normal">(bắt buộc khi tạo mới, để trống nếu không đổi)</span></label><input id="ufPassword" type="password" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" /></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Họ tên <span class="text-rose-500">*</span></label><input id="ufFullname" required type="text" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" /></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Vai trò <span class="text-rose-500">*</span></label><select id="ufRole" class="w-full px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm"><option value="employee">Nhân viên</option><option value="manager">Trưởng phòng</option><option value="director">Ban Giám đốc</option><option value="admin">Quản trị</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-2">Phòng ban <span class="text-rose-500">*</span> <span class="text-xs text-slate-400 font-normal">(phòng đầu tiên là chính; có thể chọn nhiều)</span></label><div id="ufDeptsContainer" class="border border-slate-300 rounded-lg p-3 min-h-[100px] bg-slate-50"><div id="ufDeptsChips" class="flex flex-wrap gap-1.5 mb-2"></div><div class="flex flex-wrap gap-1.5"><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="HCNS" class="rounded text-indigo-600"> HCNS</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Kế toán" class="rounded text-indigo-600"> Kế toán</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Thu mua" class="rounded text-indigo-600"> Thu mua</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Ban Giám đốc" class="rounded text-indigo-600"> Ban Giám đốc</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng IT" class="rounded text-indigo-600"> Phòng IT</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Kế toán" class="rounded text-indigo-600"> Phòng Kế toán</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Nhân sự" class="rounded text-indigo-600"> Phòng Nhân sự</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Kinh doanh" class="rounded text-indigo-600"> Phòng Kinh doanh</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Marketing" class="rounded text-indigo-600"> Phòng Marketing</label></div><p class="text-xs text-slate-400 mt-2">Phòng đầu tiên = phòng chính (hiển thị mặc định).</p></div></div><div class="flex justify-end gap-2 pt-3 border-t border-slate-100"><button type="button" data-action="close-user-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button><button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">Lưu</button></div></form></div></div></main>
   </div>
 
   <!-- ============ PROJECT MODAL (Task gốc) ============ -->
@@ -445,12 +449,15 @@
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Phòng ban chủ trì <span class="text-rose-500">*</span></label>
             <select id="fDept" required class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+              <option value="HCNS">HCNS</option>
+              <option value="Kế toán">Kế toán</option>
+              <option value="Thu mua">Thu mua</option>
+              <option value="Ban Giám đốc">Ban Giám đốc</option>
               <option value="Phòng IT">Phòng IT</option>
               <option value="Phòng Kế toán">Phòng Kế toán</option>
               <option value="Phòng Nhân sự">Phòng Nhân sự</option>
               <option value="Phòng Kinh doanh">Phòng Kinh doanh</option>
               <option value="Phòng Marketing">Phòng Marketing</option>
-              <option value="Ban Giám đốc">Ban Giám đốc</option>
             </select>
           </div>
           <div>
@@ -748,6 +755,7 @@
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
+
 
 
 

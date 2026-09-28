@@ -30,6 +30,9 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const DEPARTMENTS: readonly string[] = [
+  'HCNS',
+  'Kế toán',
+  'Thu mua',
   'Ban Giám đốc',
   'Phòng IT',
   'Phòng Kế toán',

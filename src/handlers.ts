@@ -11,6 +11,7 @@ import { ROLE_LABEL, today, normalizeTags } from './utils';
 import { getTags, setTags, resetTags, initAllTagsInputs } from './tagsInput';
 import { renderTimeline, bindTimelineToggle } from './renderTimeline';
 import { setMyTasksMode } from './render';
+import { renderAdminUsers, openUserModal, closeUserModal, handleSaveUser, confirmDeleteUser, resetUserPassword } from './renderAdminUsers';
 import {
   renderDashboard,
   renderProjects,
@@ -36,7 +37,10 @@ export function showApp(): void {
 
   if (state.currentUser) {
     const roleText = ROLE_LABEL[state.currentUser.role] ?? state.currentUser.role;
-    setText('userInfo', `${state.currentUser.name} • ${roleText} • ${state.currentUser.department}`);
+    const depts = state.currentUser.departments?.length
+      ? state.currentUser.departments.join(', ')
+      : state.currentUser.department;
+    setText('userInfo', `${state.currentUser.name} • ${roleText} • ${depts}`);
 
     const todayStr = new Date().toLocaleDateString('vi-VN', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -171,6 +175,7 @@ export async function handleLogin(): Promise<void> {
       role: user.role as Role,
       name: user.fullname,
       department: user.department,
+      departments: user.departments ?? [user.department].filter(Boolean),
       loginAt: new Date().toISOString(),
     };
     state.currentUser = currentUser;
@@ -197,6 +202,7 @@ export function handleLogout(): void {
 function applyRolePermissions(): void {
   const role = state.currentUser?.role;
   const canCreate = role === 'director' || role === 'manager' || role === 'admin';
+  const isAdmin = role === 'admin';
 
   document.querySelectorAll<HTMLButtonElement>('[data-action="open-project-modal"]').forEach((b) => {
     b.style.display = canCreate ? '' : 'none';
@@ -206,6 +212,12 @@ function applyRolePermissions(): void {
   if (reportsNavBtn) {
     reportsNavBtn.style.display = role === 'employee' ? 'none' : '';
   }
+
+  // Nút "Quản lý NV" chỉ admin mới thấy
+  const adminNavBtn = document.querySelector<HTMLButtonElement>('[data-nav="adminUsers"]');
+  if (adminNavBtn) {
+    adminNavBtn.style.display = isAdmin ? '' : 'none';
+  }
 }
 
 // ============================================================
@@ -214,7 +226,7 @@ function applyRolePermissions(): void {
 export function navigateTo(view: View): void {
   state.currentView = view;
 
-  (['dashboard', 'projects', 'myTasks', 'reports', 'timeline'] as View[]).forEach((v) => {
+  (['dashboard', 'projects', 'myTasks', 'reports', 'timeline', 'adminUsers'] as View[]).forEach((v) => {
     document.getElementById(`view-${v}`)?.classList.add('hidden');
   });
   document.getElementById(`view-${view}`)?.classList.remove('hidden');
@@ -223,11 +235,12 @@ export function navigateTo(view: View): void {
   document.querySelector<HTMLButtonElement>(`[data-nav="${view}"]`)?.classList.add('active');
 
   switch (view) {
-    case 'dashboard':    renderDashboard();    break;
-    case 'projects':     renderProjects();     break;
-    case 'myTasks':      renderMyTasks();      break;
-    case 'reports':      renderReports();      break;
-    case 'timeline':     renderTimeline();     break;
+    case 'dashboard':    renderDashboard();       break;
+    case 'projects':     renderProjects();        break;
+    case 'myTasks':      renderMyTasks();         break;
+    case 'reports':      renderReports();         break;
+    case 'timeline':     renderTimeline();        break;
+    case 'adminUsers':   void renderAdminUsers(); break;
   }
   refreshIcons();
 }

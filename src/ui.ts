@@ -3,8 +3,8 @@
 // ============================================================
 import { lucideRefresh } from './utils';
 
-export type ModalId = 'projectModal' | 'subTaskModal' | 'dailyLogModal' | 'detailModal';
-const MODAL_IDS: readonly ModalId[] = ['projectModal', 'subTaskModal', 'dailyLogModal', 'detailModal'];
+export type ModalId = 'projectModal' | 'subTaskModal' | 'dailyLogModal' | 'detailModal' | 'userModal';
+const MODAL_IDS: readonly ModalId[] = ['projectModal', 'subTaskModal', 'dailyLogModal', 'detailModal', 'userModal'];
 
 let toastTimer: number | null = null;
 

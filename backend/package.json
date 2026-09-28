@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node --experimental-sqlite server.js",
-    "dev": "node --experimental-sqlite --watch server.js"
+    "dev": "node --experimental-sqlite --watch server.js",
+    "test": "node --experimental-sqlite test-suite.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

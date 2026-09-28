@@ -16,10 +16,14 @@ router.post('/login', (req, res) => {
     return res.status(400).json({ error: 'Vui lòng nhập tên đăng nhập và mật khẩu' });
   }
 
+  const cleanInput = username.trim().toLowerCase();
+  const handle = cleanInput.includes('@') ? cleanInput.split('@')[0] : cleanInput;
+  const fullEmail = cleanInput.includes('@') ? cleanInput : cleanInput + '@gmail.com';
+
   const user = db.prepare(`
-    SELECT id, username, password, fullname, role, department, active
-    FROM users WHERE username = ?
-  `).get(username.trim().toLowerCase());
+    SELECT id, username, email, password, fullname, role, department, active
+    FROM users WHERE username = ? OR email = ? OR username = ? OR email = ?
+  `).get(cleanInput, cleanInput, handle, fullEmail);
 
   if (!user || !user.active) {
     return res.status(401).json({ error: 'Tài khoản không tồn tại hoặc đã bị khóa' });
@@ -30,12 +34,18 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Sai mật khẩu' });
   }
 
+  // Lấy danh sách phòng ban từ user_departments
+  const departments = db.prepare(`
+    SELECT department FROM user_departments WHERE user_id = ? ORDER BY is_primary DESC, department
+  `).all(user.id).map((r) => r.department);
+
   const token = signToken({
     id: user.id,
     username: user.username,
     fullname: user.fullname,
     role: user.role,
-    department: user.department,
+    department: user.department, // primary (back-compat)
+    departments,
   });
 
   res.json({
@@ -46,6 +56,7 @@ router.post('/login', (req, res) => {
       fullname: user.fullname,
       role: user.role,
       department: user.department,
+      departments,
     },
   });
 });
@@ -60,7 +71,10 @@ router.get('/me', requireAuth, (req, res) => {
   if (!user || !user.active) {
     return res.status(401).json({ error: 'Tài khoản không hợp lệ' });
   }
-  res.json(user);
+  const departments = db.prepare(`
+    SELECT department FROM user_departments WHERE user_id = ? ORDER BY is_primary DESC, department
+  `).all(user.id).map((r) => r.department);
+  res.json({ ...user, departments });
 });
 
 // POST /api/auth/change-password — Đổi mật khẩu

@@ -23,30 +23,46 @@ function recalcTaskProgress(taskId) {
 }
 
 // ============================================================
-// Helper: lọc task theo role
+// Helper: lấy danh sách phòng ban user có quyền truy cập
+// ============================================================
+function getUserDepartments(userId) {
+  const rows = db.prepare(`
+    SELECT department FROM user_departments WHERE user_id = ? ORDER BY is_primary DESC
+  `).all(userId);
+  return rows.map((r) => r.department);
+}
+
+// ============================================================
+// Helper: lọc task theo role — dùng user_departments
 // ============================================================
 function getTasksForUser(user) {
   let tasks;
   if (user.role === 'director' || user.role === 'admin') {
-    // Thấy tất cả
+    // BGĐ/Admin: thấy tất cả
     tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
-  } else if (user.role === 'manager') {
-    // Thấy task phòng mình + phòng phối hợp
-    tasks = db.prepare(`
-      SELECT * FROM tasks
-      WHERE department = ?
-         OR collab_depts LIKE ?
-      ORDER BY created_at DESC
-    `).all(user.department, `%"${user.department}"%`);
   } else {
-    // employee: thấy task có subtask được giao cho mình
-    tasks = db.prepare(`
-      SELECT DISTINCT t.* FROM tasks t
-      INNER JOIN subtasks s ON s.task_id = t.id
-      INNER JOIN users u ON u.id = s.assignee_id
-      WHERE u.id = ?
-      ORDER BY t.created_at DESC
-    `).all(user.id);
+    // Manager/Employee: thấy task thuộc bất kỳ phòng nào mình thuộc
+    const depts = getUserDepartments(user.id);
+    if (!depts.length) {
+      // Fallback nếu user chưa có user_departments (lỗi data) → dùng department cũ
+      const fallback = user.department || '';
+      if (!fallback) return [];
+      tasks = db.prepare(`
+        SELECT * FROM tasks
+        WHERE department = ? OR collab_depts LIKE ?
+        ORDER BY created_at DESC
+      `).all(fallback, `%"${fallback}"%`);
+    } else {
+      const placeholders = depts.map(() => '?').join(',');
+      const likeClauses = depts.map(() => `collab_depts LIKE ?`).join(' OR ');
+      const params = [...depts, ...depts.map((d) => `%"${d}"%`)];
+      tasks = db.prepare(`
+        SELECT * FROM tasks
+        WHERE department IN (${placeholders})
+           OR ${likeClauses}
+        ORDER BY created_at DESC
+      `).all(...params);
+    }
   }
   return tasks;
 }
@@ -215,9 +231,12 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
   const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   if (!t) return res.status(404).json({ error: 'Không tìm thấy công việc' });
 
-  // Manager chỉ sửa task phòng mình
-  if (req.user.role === 'manager' && t.department !== req.user.department) {
-    return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc này' });
+  // Manager chỉ sửa task thuộc phòng mình (đa phòng — check user_departments)
+  if (req.user.role === 'manager') {
+    const userDepts = getUserDepartments(req.user.id);
+    const collab = parseJsonArray(t.collab_depts, []);
+    const allowed = userDepts.includes(t.department) || collab.some((d) => userDepts.includes(d));
+    if (!allowed) return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc này' });
   }
 
   const {
@@ -295,8 +314,11 @@ router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (r
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.taskId);
   if (!task) return res.status(404).json({ error: 'Không tìm thấy công việc' });
 
-  if (req.user.role === 'manager' && task.department !== req.user.department) {
-    return res.status(403).json({ error: 'Không có quyền thêm công việc con vào task này' });
+  if (req.user.role === 'manager') {
+    const userDepts = getUserDepartments(req.user.id);
+    const collab = parseJsonArray(task.collab_depts, []);
+    const allowed = userDepts.includes(task.department) || collab.some((d) => userDepts.includes(d));
+    if (!allowed) return res.status(403).json({ error: 'Không có quyền thêm công việc con vào task này' });
   }
 
   const { name, description, assigneeId, startDate, endDate, priority, notes, tags } = req.body;
@@ -341,8 +363,16 @@ router.put('/:taskId/subtasks/:subId', (req, res) => {
   if (!sub) return res.status(404).json({ error: 'Không tìm thấy công việc con' });
 
   // Employee chỉ cập nhật subtask được giao cho mình
-  if (req.user.role === 'employee' && sub.assignee_id !== req.user.id) {
-    return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc con này' });
+  if (req.user.role === 'employee') {
+    if (sub.assignee_id !== req.user.id) {
+      return res.status(403).json({ error: 'Không có quyền chỉnh sửa công việc con này' });
+    }
+    // Employee chỉ được cập nhật tiến độ, kết quả, ghi chú, trạng thái
+    req.body.name = sub.name;
+    req.body.assigneeId = sub.assignee_id;
+    req.body.startDate = sub.start_date;
+    req.body.endDate = sub.end_date;
+    req.body.priority = sub.priority;
   }
 
   const { name, description, assigneeId, startDate, endDate, progress, status, priority, results, notes, tags } = req.body;

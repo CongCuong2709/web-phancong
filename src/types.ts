@@ -8,7 +8,7 @@ export type ProjectStatus = 'not_started' | 'in_progress' | 'completed' | 'on_ho
 
 export type Priority = 'low' | 'medium' | 'high';
 
-export type View = 'dashboard' | 'projects' | 'myTasks' | 'reports' | 'timeline';
+export type View = 'dashboard' | 'projects' | 'myTasks' | 'reports' | 'timeline' | 'adminUsers';
 
 /** Chế độ xem trong view "Dòng thời gian" (gộp Lịch + Gantt) */
 export type TimelineMode = 'calendar' | 'gantt';
@@ -87,7 +87,8 @@ export interface CurrentUser {
   username: string;     // tên đăng nhập
   role: Role;
   name: string;         // fullname hiển thị
-  department: string;
+  department: string;   // phòng ban chính (primary)
+  departments: string[];// TẤT CẢ phòng ban user thuộc (multi-dept)
   loginAt: string;
 }
 

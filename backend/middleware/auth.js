@@ -5,8 +5,13 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'phancong_secret_key_2024_change_in_production';
 
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️  CẢNH BÁO: Chưa cấu hình JWT_SECRET cho môi trường Production!');
+}
+
 /**
  * Tạo JWT token cho user
+ * @param {object} payload — phải có id, username, fullname, role, departments[]
  */
 function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });

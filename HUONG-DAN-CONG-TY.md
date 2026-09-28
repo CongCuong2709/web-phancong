@@ -45,23 +45,45 @@ Server sẽ chạy tại `http://0.0.0.0:3000`
 
 ## Bước 3: Nhân viên truy cập
 
+### Truy cập nội bộ (LAN):
 1. Tìm IP của PC server: mở CMD → gõ `ipconfig` → xem IPv4 Address
 2. Nhân viên mở trình duyệt → vào `http://192.168.x.x:3000`
 
-## Tài khoản mặc định
+### Truy cập qua Internet (Tên miền Mắt Bão & PC 24/7):
+👉 Xem chi tiết tại [HUONG-DAN-DUA-LEN-INTERNET.md](file:///e:/web-phancong/HUONG-DAN-DUA-LEN-INTERNET.md) (Sử dụng Cloudflare Tunnel miễn phí, an toàn & không cần mở port).
 
-| Username | Mật khẩu | Vai trò |
-|---|---|---|
-| admin | admin123 | Quản trị |
-| giamdoc | giamdoc123 | Giám đốc |
-| tp.it | 123456 | Trưởng phòng IT |
-| tp.ns | 123456 | Trưởng phòng NS |
-| tp.kt | 123456 | Trưởng phòng KT |
-| nv.it01 | 123456 | Nhân viên IT |
-| nv.it02 | 123456 | Nhân viên IT |
-| nv.ns01 | 123456 | Nhân viên NS |
+## Danh sách tài khoản mặc định (Khởi tạo từ hệ thống cũ)
 
-**⚠️ Đổi mật khẩu ngay sau khi deploy!**
+### 1. Quản trị hệ thống
+- **Username**: `admin` | **Mật khẩu**: `admin123` | **Vai trò**: Quản trị (Admin)
+
+### 2. Ban Giám đốc (Role: Director)
+| Username / Email | Mật khẩu | Họ tên / Chức danh | Phòng ban |
+|---|---|---|---|
+| `tienanhkinhbac@gmail.com` | `123456` | Tổng giám đốc Tiến Anh | Ban Giám đốc |
+| `tag.dndung@gmail.com` | `123456` | Tổng giám đốc Đ.N. Dũng | Ban Giám đốc |
+| `cuong0169c@gmail.com` | `123456` | Tổng giám đốc Cường | Ban Giám đốc |
+
+### 3. Trưởng phòng (Role: Manager)
+| Username / Email | Mật khẩu | Họ tên / Chức danh | Phòng ban quản lý |
+|---|---|---|---|
+| `81nham@gmail.com` | `123456` | Trưởng phòng HCNS (81nham) | HCNS |
+| `damvanluan1403@gmail.com` | `123456` | Đàm Văn Luận | HCNS |
+| `huyduongsishust5059@gmail.com` | `123456` | Huy Dương | HCNS, Kế toán |
+| `caocuong17479@gmail.com` | `123456` | Cao Cường | Kế toán, Thu mua |
+| `bintemp05@gmail.com` | `123456` | Trưởng phòng Thu mua (bintemp05) | Thu mua |
+
+### 4. Nhân viên (Role: Employee)
+| Username / Email | Mật khẩu | Họ tên | Phòng ban |
+|---|---|---|---|
+| `tag.hcns8@gmail.com` | `123456` | Đỗ Thị Ánh Nguyệt | HCNS |
+| `nhinguyen.tag1@gmail.com` | `123456` | Nguyễn Thảo Nhi | HCNS |
+| `tag.thitruong@gmail.com` | `123456` | Bùi Quang Tú | Thu mua |
+| `tag.ketoan1@gmail.com` | `123456` | Nguyễn Thị Hằng | Kế toán |
+
+*(Lưu ý: Có thể đăng nhập bằng email đầy đủ hoặc phần trước dấu `@`, ví dụ `tag.hcns8` hoặc `tag.hcns8@gmail.com` đều được)*
+
+**⚠️ Vui lòng đổi mật khẩu ngay sau lần đăng nhập đầu tiên!**
 
 ## Backup dữ liệu
 
