@@ -16,32 +16,31 @@ export function showToast(msg: string, isError: boolean = false): void {
 
   msgEl.textContent = msg;
   toast.classList.remove('hidden');
-  toast.classList.add('toast-show');
-  toast.style.background = isError ? '#b91c1c' : '#0f172a';
+  toast.classList.add('show');
+  toast.classList.toggle('error', isError);
 
   if (toastTimer !== null) {
     window.clearTimeout(toastTimer);
   }
   toastTimer = window.setTimeout(() => {
     toast.classList.add('hidden');
-    toast.classList.remove('toast-show');
+    toast.classList.remove('show');
+    toast.classList.remove('error');
     toastTimer = null;
   }, 2500);
 }
 
-// --- Modals ---
+// --- Modals (dùng class modal-backdrop.open) ---
 export function openModal(id: ModalId): void {
   const modal = document.getElementById(id);
   if (!modal) return;
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+  modal.classList.add('open');
 }
 
 export function closeModal(id: ModalId): void {
   const modal = document.getElementById(id);
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  modal.classList.remove('open');
 }
 
 export function setupModalBackdropClose(): void {
@@ -50,8 +49,7 @@ export function setupModalBackdropClose(): void {
     if (!el) return;
     el.addEventListener('click', (e: MouseEvent) => {
       if (e.target === el) {
-        el.classList.add('hidden');
-        el.classList.remove('flex');
+        el.classList.remove('open');
       }
     });
   });
@@ -63,8 +61,7 @@ export function setupEscapeClose(): void {
     MODAL_IDS.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.classList.add('hidden');
-      el.classList.remove('flex');
+      el.classList.remove('open');
     });
   });
 }

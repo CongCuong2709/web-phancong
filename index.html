@@ -6,73 +6,137 @@
   <title>Hệ thống Phân công Công việc</title>
   <meta name="description" content="Hệ thống phân công và theo dõi công việc nội bộ — 3 cấp: Giám đốc, Trưởng phòng, Nhân viên" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    /* Tailwind config — mở rộng để dùng token màu, dark mode theo data-theme */
+    tailwind.config = {
+      darkMode: ['class', '[data-theme="dark"]'],
+      theme: {
+        extend: {
+          colors: {
+            'app':         'var(--bg-app)',
+            'surface':     'var(--bg-surface)',
+            'sunken':      'var(--bg-sunken)',
+            'hover':       'var(--bg-hover)',
+            'bd':          'var(--border)',
+            'bd-soft':     'var(--border-soft)',
+            'bd-strong':   'var(--border-strong)',
+            't1':          'var(--text-primary)',
+            't2':          'var(--text-secondary)',
+            't3':          'var(--text-tertiary)',
+            'accent':      'var(--accent)',
+            'accent-hov':  'var(--accent-hover)',
+            'accent-soft': 'var(--accent-soft)',
+            'danger':      'var(--danger)',
+            'danger-soft': 'var(--danger-soft)',
+            'warn':        'var(--warn)',
+            'warn-soft':   'var(--warn-soft)',
+            'success':     'var(--success)',
+            'success-soft':'var(--success-soft)',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            serif: ['Source Serif 4', 'Georgia', 'serif'],
+            mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <!-- FullCalendar cho view Lịch -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/vi.global.min.js"></script>
+
+  <!-- =========================================================
+       Inline theme script — chạy TRƯỚC khi body render để tránh flash
+       ========================================================= -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('pc-theme');
+        var mode = (saved === 'light' || saved === 'dark' || saved === 'system') ? saved : 'system';
+        var resolved = mode === 'system'
+          ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : mode;
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.setAttribute('data-theme-mode', mode);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-theme-mode', 'system');
+      }
+    })();
+  </script>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased">
+<body class="app-bg text-t1 antialiased font-sans">
 
   <!-- ============ LOGIN ============ -->
-  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-      <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-100 mb-4">
-          <i data-lucide="briefcase" class="w-8 h-8 text-indigo-600"></i>
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <!-- Theme toggle nhỏ góc trên phải -->
+      <div class="flex justify-end mb-4" id="loginThemeMount"></div>
+
+      <div class="card p-8">
+        <div class="mb-8">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-md bg-accent-soft mb-5">
+            <i data-lucide="briefcase" class="w-6 h-6 text-accent"></i>
+          </div>
+          <h1 class="font-serif text-3xl font-semibold text-t1 leading-tight">Phân công Công việc</h1>
+          <span class="signature-rule"></span>
+          <p class="text-t2 text-sm mt-3">Đăng nhập để tiếp tục.</p>
         </div>
-        <h1 class="text-2xl font-bold text-slate-900">Phân công Công việc</h1>
-        <p class="text-slate-500 mt-2">Hệ thống quản lý công việc 3 cấp</p>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="label">Tên đăng nhập</label>
+            <div class="relative">
+              <i data-lucide="user" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-t3 pointer-events-none"></i>
+              <input id="loginUsername" type="text" placeholder="VD: giamdoc, tp.it, nv.it01"
+                     autocomplete="username"
+                     class="input pl-9" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Mật khẩu</label>
+            <div class="relative">
+              <i data-lucide="lock" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-t3 pointer-events-none"></i>
+              <input id="loginPassword" type="password" placeholder="Nhập mật khẩu"
+                     autocomplete="current-password"
+                     class="input pl-9" />
+            </div>
+          </div>
+          <button id="loginBtn" type="submit" class="btn btn-primary w-full py-3">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            Đăng nhập
+          </button>
+        </form>
+
+        <div id="loginDevHint" class="mt-6 p-3 surface border border-bd text-xs text-t2 space-y-1 hidden">
+          <p class="font-semibold text-t1 mb-1">Tài khoản hệ thống</p>
+          <p>BGĐ: <strong>giamdoc</strong>, <strong>phogiamdoc</strong></p>
+          <p>Trưởng phòng: <strong>tp.it</strong>, <strong>tp.hcns</strong></p>
+          <p>Nhân viên: <strong>nv.it01</strong>, <strong>nv.hcns01</strong></p>
+          <p class="text-t3 mt-1">Mật khẩu mặc định: <code>123456</code> · Admin: <code>admin/admin123</code></p>
+        </div>
       </div>
 
-      <form id="loginForm" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Tên đăng nhập</label>
-          <div class="relative">
-            <i data-lucide="user" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input id="loginUsername" type="text" placeholder="VD: giamdoc, tp.it, nv.it01"
-                   autocomplete="username"
-                   class="w-full pl-9 pr-3 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Mật khẩu</label>
-          <div class="relative">
-            <i data-lucide="lock" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input id="loginPassword" type="password" placeholder="Nhập mật khẩu"
-                   autocomplete="current-password"
-                   class="w-full pl-9 pr-3 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
-          </div>
-        </div>
-        <button id="loginBtn" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2">
-          <i data-lucide="log-in" class="w-5 h-5"></i>
-          Đăng nhập
-        </button>
-      </form>
-
-      <div class="mt-6 p-4 bg-slate-50 rounded-lg text-xs text-slate-600 space-y-1">
-        <p class="font-semibold mb-1">📋 Tài khoản hệ thống (Mật khẩu: 123456):</p>
-        <p>🏢 BGĐ: <strong>tienanhkinhbac@gmail.com</strong>, <strong>tag.dndung@gmail.com</strong></p>
-        <p>👔 Trưởng phòng: <strong>81nham@gmail.com</strong>, <strong>caocuong17479@gmail.com</strong></p>
-        <p>🧑 Nhân viên: <strong>tag.hcns8@gmail.com</strong>, <strong>tag.thitruong@gmail.com</strong></p>
-        <p>👑 Admin: <strong>admin</strong> / admin123</p>
-      </div>
+      <p class="text-center text-t3 text-xs mt-6">v3 · © 2026 — Hệ thống nội bộ</p>
     </div>
   </div>
 
   <!-- ============ MAIN APP ============ -->
   <div id="appScreen" class="hidden">
     <!-- TOP NAV -->
-    <nav class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <nav class="navbar">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+        <div class="flex items-center justify-between h-14">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-md bg-accent flex items-center justify-center flex-shrink-0">
               <i data-lucide="briefcase" class="w-5 h-5 text-white"></i>
             </div>
-            <div>
-              <h1 class="text-base font-bold text-slate-900">Phân công Công việc</h1>
-              <p class="text-xs text-slate-500" id="userInfo">—</p>
+            <div class="min-w-0">
+              <h1 class="font-serif text-base font-semibold text-t1 leading-tight truncate">Phân công Công việc</h1>
+              <p class="text-t3 text-xs leading-tight truncate" id="userInfo">—</p>
             </div>
           </div>
 
@@ -88,7 +152,7 @@
             <button data-nav="myTasks" id="navMyTasks" class="nav-btn relative">
               <i data-lucide="list-checks" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Việc của tôi</span>
-              <span id="myTasksBadge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-xs font-semibold rounded-full flex items-center justify-center">0</span>
+              <span id="myTasksBadge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-danger text-white text-xs font-semibold rounded-full flex items-center justify-center">0</span>
             </button>
             <button data-nav="reports" class="nav-btn">
               <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
@@ -96,13 +160,19 @@
             </button>
             <button data-nav="timeline" class="nav-btn">
               <i data-lucide="calendar-clock" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Dòng thời gian</span>
+              <span class="hidden sm:inline">Lịch / Gantt</span>
             </button>
             <button data-nav="adminUsers" id="navAdminUsers" class="nav-btn" style="display:none">
               <i data-lucide="users-cog" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Quản lý NV</span>
+              <span class="hidden sm:inline">Người dùng</span>
             </button>
-            <button data-action="logout" class="nav-btn text-rose-600 hover:bg-rose-50">
+
+            <span class="w-px h-6 bg-bd mx-2 hidden sm:block"></span>
+
+            <!-- Theme switcher -->
+            <div id="navbarThemeMount" class="hidden sm:block"></div>
+
+            <button data-action="logout" class="nav-btn danger">
               <i data-lucide="log-out" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Đăng xuất</span>
             </button>
@@ -116,663 +186,556 @@
 
       <!-- ============ DASHBOARD ============ -->
       <section id="view-dashboard" class="view">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex items-end justify-between mb-2 gap-3">
           <div>
-            <h2 class="text-2xl font-bold text-slate-900">Tổng quan</h2>
-            <p class="text-sm text-slate-500 mt-1" id="dashboardGreeting">—</p>
+            <h2 class="font-serif text-3xl font-semibold text-t1 leading-tight">Tổng quan</h2>
+            <span class="signature-rule"></span>
+            <p class="text-sm text-t2 mt-3" id="dashboardGreeting">—</p>
           </div>
-          <button data-action="open-project-modal" class="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
+          <button data-action="open-project-modal" class="hidden sm:inline-flex btn btn-primary">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Tạo công việc
           </button>
         </div>
 
-        <!-- Stat cards — 4 cột cố định + 1 cột dynamic (statExtra) -->
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          <div class="bg-white p-5 rounded-xl border border-slate-200">
-            <div class="flex items-center justify-between mb-3">
-              <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <i data-lucide="folder" class="w-5 h-5 text-blue-600"></i>
-              </div>
-            </div>
-            <p class="text-2xl font-bold text-slate-900" id="statTotal">0</p>
-            <p class="text-sm text-slate-500 mt-1">Tổng công việc</p>
+        <!-- Stat row (hàng ngang, density cao) -->
+        <div class="stat-row" id="statRow">
+          <div class="stat-cell">
+            <span class="stat-label">Tổng công việc</span>
+            <span class="stat-value" id="statTotal">0</span>
+            <span class="stat-meta" id="statTotalMeta">đầu việc</span>
+            <div class="stat-bar t-accent" id="statTotalBar"></div>
           </div>
-          <div class="bg-white p-5 rounded-xl border border-slate-200">
-            <div class="flex items-center justify-between mb-3">
-              <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <i data-lucide="loader" class="w-5 h-5 text-amber-600"></i>
-              </div>
-            </div>
-            <p class="text-2xl font-bold text-slate-900" id="statInProgress">0</p>
-            <p class="text-sm text-slate-500 mt-1">Đang thực hiện</p>
+          <div class="stat-cell">
+            <span class="stat-label">Đang thực hiện</span>
+            <span class="stat-value" id="statInProgress">0</span>
+            <span class="stat-meta" id="statInProgressMeta">trong tổng</span>
+            <div class="stat-bar t-accent" id="statInProgressBar"></div>
           </div>
-          <div class="bg-white p-5 rounded-xl border border-slate-200">
-            <div class="flex items-center justify-between mb-3">
-              <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>
-              </div>
-            </div>
-            <p class="text-2xl font-bold text-slate-900" id="statCompleted">0</p>
-            <p class="text-sm text-slate-500 mt-1">Hoàn thành</p>
+          <div class="stat-cell">
+            <span class="stat-label">Hoàn thành</span>
+            <span class="stat-value" id="statCompleted">0</span>
+            <span class="stat-meta" id="statCompletedMeta">0% tổng</span>
+            <div class="stat-bar t-success" id="statCompletedBar"></div>
           </div>
-          <div class="bg-white p-5 rounded-xl border border-slate-200">
-            <div class="flex items-center justify-between mb-3">
-              <div class="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
-                <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600"></i>
-              </div>
-            </div>
-            <p class="text-2xl font-bold text-slate-900" id="statOverdue">0</p>
-            <p class="text-sm text-slate-500 mt-1">Quá hạn</p>
+          <div class="stat-cell">
+            <span class="stat-label">Quá hạn</span>
+            <span class="stat-value" id="statOverdue" style="color: var(--danger);">0</span>
+            <span class="stat-meta">cần xử lý</span>
+            <div class="stat-bar t-danger" id="statOverdueBar"></div>
           </div>
-          <!-- Dynamic 5th card (role-specific) -->
-          <div id="statExtra"></div>
         </div>
 
-        <!-- Two columns: recent + by department/employee/log-reminder -->
+        <!-- Extra stat (role-specific) -->
+        <div id="statExtra" class="mb-6"></div>
+
+        <!-- Two columns: recent + dept/employee/log -->
         <div class="grid lg:grid-cols-3 gap-6 mb-6">
-          <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200">
-            <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 class="font-semibold text-slate-900">Công việc gần đây</h3>
-              <button data-nav="projects" class="text-sm text-indigo-600 hover:text-indigo-700">Xem tất cả</button>
+          <div class="lg:col-span-2 card">
+            <div class="px-5 py-4 border-b border-bd flex items-center justify-between">
+              <h3 class="font-semibold text-t1">Công việc gần đây</h3>
+              <button data-nav="projects" class="text-sm text-accent hover:text-accent-hov">Xem tất cả →</button>
             </div>
-            <div id="recentProjects" class="p-2"></div>
+            <div id="recentProjects"></div>
           </div>
 
-          <div class="bg-white rounded-xl border border-slate-200">
-            <div class="px-5 py-4 border-b border-slate-200">
-              <h3 class="font-semibold text-slate-900" id="deptStatsTitle">Theo phòng ban</h3>
+          <div class="card">
+            <div class="px-5 py-4 border-b border-bd">
+              <h3 class="font-semibold text-t1" id="deptStatsTitle">Theo phòng ban</h3>
             </div>
-            <div id="deptStats" class="p-5 space-y-3"></div>
+            <div id="deptStats" class="p-5 space-y-4"></div>
           </div>
         </div>
 
         <!-- Overdue panel -->
-        <div class="bg-white rounded-xl border border-rose-200">
-          <div class="px-5 py-4 border-b border-rose-100 flex items-center gap-2">
-            <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i>
-            <h3 class="font-semibold text-slate-900">Công việc quá hạn</h3>
+        <div class="card border-l-4" style="border-left-color: var(--danger);">
+          <div class="px-5 py-4 border-b border-bd flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-danger"></i>
+            <h3 class="font-semibold text-t1">Công việc quá hạn</h3>
           </div>
-          <div id="overdueList" class="px-5 py-3"></div>
+          <div id="overdueList" class="px-2 py-2"></div>
         </div>
       </section>
 
       <!-- ============ PROJECTS ============ -->
       <section id="view-projects" class="view hidden">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-slate-900">Danh sách công việc</h2>
-            <p class="text-sm text-slate-500 mt-1">Quản lý và theo dõi các công việc đang triển khai</p>
+            <h2 class="font-serif text-3xl font-semibold text-t1">Danh sách công việc</h2>
+            <span class="signature-rule"></span>
+            <p class="text-sm text-t2 mt-3">Quản lý và theo dõi các công việc đang triển khai.</p>
           </div>
-          <button data-action="open-project-modal" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
+          <button data-action="open-project-modal" class="btn btn-primary">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Tạo công việc mới
           </button>
         </div>
 
         <!-- Filters -->
-        <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4 pb-4 border-b border-bd">
           <div class="lg:col-span-2 relative">
-            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-t3 pointer-events-none"></i>
             <input id="filterSearch" type="text" placeholder="Tìm theo mã, tên, người thực hiện..."
-                   class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+                   class="input pl-9" />
           </div>
-          <select id="filterDept" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+          <select id="filterDept" class="select">
             <option value="">Tất cả phòng ban</option>
           </select>
-          <select id="filterStatus" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+          <select id="filterStatus" class="select">
             <option value="">Tất cả trạng thái</option>
             <option value="not_started">Chưa bắt đầu</option>
             <option value="in_progress">Đang thực hiện</option>
             <option value="completed">Hoàn thành</option>
             <option value="on_hold">Tạm dừng</option>
           </select>
-          <select id="filterPriority" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+          <select id="filterPriority" class="select">
             <option value="">Tất cả mức độ</option>
             <option value="high">Cao</option>
             <option value="medium">Trung bình</option>
             <option value="low">Thấp</option>
           </select>
-          <select id="filterTag" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+          <select id="filterTag" class="select">
             <option value="">Tất cả tag</option>
           </select>
         </div>
 
         <!-- Table -->
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+        <div class="tbl-wrap">
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead>
                 <tr>
-                  <th class="px-4 py-3 text-left font-medium">Mã</th>
-                  <th class="px-4 py-3 text-left font-medium">Tên công việc</th>
-                  <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Phòng ban</th>
-                  <th class="px-4 py-3 text-left font-medium hidden lg:table-cell">Người nhận</th>
-                  <th class="px-4 py-3 text-left font-medium">Tiến độ</th>
-                  <th class="px-4 py-3 text-left font-medium">Trạng thái</th>
-                  <th class="px-4 py-3 text-left font-medium hidden lg:table-cell">Hạn cuối</th>
-                  <th class="px-4 py-3 text-right font-medium">Thao tác</th>
+                  <th>Mã</th>
+                  <th>Tên công việc</th>
+                  <th class="hidden md:table-cell">Phòng ban</th>
+                  <th class="hidden lg:table-cell">Người nhận</th>
+                  <th>Tiến độ</th>
+                  <th>Trạng thái</th>
+                  <th class="hidden lg:table-cell">Hạn cuối</th>
+                  <th class="text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody id="projectTableBody" class="divide-y divide-slate-100"></tbody>
+              <tbody id="projectTableBody"></tbody>
             </table>
           </div>
-          <div id="emptyProjects" class="hidden p-10 text-center text-slate-400">
-            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3"></i>
-            <p>Không có công việc nào phù hợp</p>
+          <div id="emptyProjects" class="hidden empty-state">
+            <p class="empty-title">Không có công việc nào</p>
+            <p class="empty-desc">Bắt đầu bằng cách tạo một task mới — nhấn nút + ở góc trên.</p>
           </div>
         </div>
       </section>
 
       <!-- ============ MY TASKS ============ -->
       <section id="view-myTasks" class="view hidden">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-slate-900">Việc của tôi</h2>
-            <p class="text-sm text-slate-500 mt-1">Các công việc được phân công cho bạn</p>
+            <h2 class="font-serif text-3xl font-semibold text-t1">Việc của tôi</h2>
+            <span class="signature-rule"></span>
+            <p class="text-sm text-t2 mt-3">Các công việc được phân công cho bạn.</p>
           </div>
-          <!-- Sub-tabs (Danh sách / Báo cáo hôm nay) -->
           <div id="myTasksTabsMount"></div>
         </div>
 
         <div id="myTasksList" class="grid gap-4"></div>
-        <div id="emptyMyTasks" class="hidden bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
-          <p class="text-slate-500">Bạn chưa được giao công việc nào</p>
+        <div id="emptyMyTasks" class="hidden card">
+          <div class="empty-state">
+            <p class="empty-title">Chưa có công việc nào</p>
+            <p class="empty-desc">Bạn chưa được giao công việc nào. Khi có, chúng sẽ hiển thị ở đây.</p>
+          </div>
         </div>
       </section>
 
       <!-- ============ REPORTS ============ -->
       <section id="view-reports" class="view hidden">
         <div class="mb-6">
-          <h2 class="text-2xl font-bold text-slate-900">Báo cáo & Thống kê</h2>
-          <p class="text-sm text-slate-500 mt-1">Tổng hợp tình hình triển khai công việc</p>
+          <h2 class="font-serif text-3xl font-semibold text-t1">Báo cáo &amp; Thống kê</h2>
+          <span class="signature-rule"></span>
+          <p class="text-sm text-t2 mt-3">Tổng hợp tình hình triển khai công việc.</p>
         </div>
 
         <div class="grid lg:grid-cols-2 gap-6">
-          <div class="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 class="font-semibold text-slate-900 mb-4">Phân bổ theo trạng thái</h3>
+          <div class="card p-5">
+            <h3 class="font-semibold text-t1 mb-4">Phân bổ theo trạng thái</h3>
             <div id="statusChart" class="space-y-3"></div>
           </div>
-          <div class="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 class="font-semibold text-slate-900 mb-4">Phân bổ theo phòng ban</h3>
+          <div class="card p-5">
+            <h3 class="font-semibold text-t1 mb-4">Phân bổ theo phòng ban</h3>
             <div id="deptChart" class="space-y-3"></div>
           </div>
-          <div class="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 class="font-semibold text-slate-900 mb-4">Theo mức độ ưu tiên</h3>
+          <div class="card p-5">
+            <h3 class="font-semibold text-t1 mb-4">Theo mức độ ưu tiên</h3>
             <div id="priorityChart" class="space-y-3"></div>
           </div>
-          <div class="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 class="font-semibold text-slate-900 mb-4">Tiến độ trung bình theo phòng ban</h3>
+          <div class="card p-5">
+            <h3 class="font-semibold text-t1 mb-4">Tiến độ trung bình theo phòng ban</h3>
             <div id="deptProgressChart" class="space-y-3"></div>
           </div>
         </div>
       </section>
 
-      <!-- ============ TIMELINE (gộp Lịch + Gantt) ============ --><section id="view-timeline" class="view hidden"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6"><div><h2 class="text-2xl font-bold text-slate-900">Dòng thời gian</h2><p class="text-sm text-slate-500 mt-1">Trực quan tiến độ theo ngày / tuần / tháng — chuyển chế độ Lịch ↔ Gantt</p></div><div id="timelineToggleMount"></div></div><div id="timelineContent"></div></section><!-- LEGACY_CALENDAR_HIDDEN --><section id="view-calendar" style="display:none" class="view hidden">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <!-- ============ TIMELINE (gộp Lịch + Gantt) ============ -->
+      <section id="view-timeline" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-slate-900">Lịch công việc</h2>
-            <p class="text-sm text-slate-500 mt-1">Xem công việc theo ngày / tuần / tháng</p>
+            <h2 class="font-serif text-3xl font-semibold text-t1">Dòng thời gian</h2>
+            <span class="signature-rule"></span>
+            <p class="text-sm text-t2 mt-3">Trực quan tiến độ theo ngày / tuần / tháng — chuyển chế độ Lịch ↔ Gantt.</p>
           </div>
-          <div class="flex items-center gap-2">
-            <label class="text-xs text-slate-500">Bao gồm:</label>
-            <label class="flex items-center gap-1 text-sm"><input id="calIncludeTasks" type="checkbox" checked class="rounded"> CV gốc</label>
-            <label class="flex items-center gap-1 text-sm"><input id="calIncludeSubs" type="checkbox" checked class="rounded"> đầu việc</label>
-          </div>
+          <div id="timelineToggleMount"></div>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-3">
-          <div id="calendarHost"></div>
-        </div>
+        <div id="timelineContent"></div>
       </section>
 
-      <!-- LEGACY_GANTT_HIDDEN --><section id="view-gantt" style="display:none" class="view hidden">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <!-- ============ ADMIN: QUẢN LÝ NGƯỜI DÙNG ============ -->
+      <section id="view-adminUsers" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-slate-900">Sơ đồ Gantt</h2>
-            <p class="text-sm text-slate-500 mt-1">Trực quan tiến độ theo thời gian — CV gốc (header) & đầu việc (sub-bar)</p>
+            <h2 class="font-serif text-3xl font-semibold text-t1">Quản lý người dùng</h2>
+            <span class="signature-rule"></span>
+            <p class="text-sm text-t2 mt-3">Thêm / sửa / khóa tài khoản; gán nhiều phòng ban cho mỗi user.</p>
           </div>
-          <div class="flex items-center gap-2">
-            <button id="ganttPrev" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium flex items-center gap-1">
-              <i data-lucide="chevron-left" class="w-4 h-4"></i> Trước
-            </button>
-            <button id="ganttToday" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hôm nay</button>
-            <button id="ganttNext" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium flex items-center gap-1">
-              Sau <i data-lucide="chevron-right" class="w-4 h-4"></i>
-            </button>
-            <select id="ganttRange" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
-              <option value="week">Tuần</option>
-              <option value="month" selected>Tháng</option>
-              <option value="quarter">Quý</option>
-            </select>
-          </div>
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-3">
-          <div id="ganttHost" class="gantt-host"></div>
-        </div>
-        <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-blue-500"></span>CV gốc</span>
-          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-violet-500"></span>đầu việc</span>
-          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-rose-500"></span>Quá hạn</span>
-          <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-emerald-500"></span>Hoàn thành</span>
-        </div>
-      </section>
-
-      <!-- ============ DAILY REPORT (staging - ẩn, dùng view-myTasks sub-tab) ============ --><section id="view-dailyReport" style="display:none">
-        <!-- Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-          <div>
-            <h2 class="text-2xl font-bold text-slate-900">Báo cáo hôm nay</h2>
-            <p class="text-sm text-slate-500 mt-1" id="dailyReportDate">—</p>
-          </div>
-          <button id="btnSubmitAllReports"
-            onclick="window.submitAllDailyReports()"
-            class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium transition shadow-sm">
-            <i data-lucide="send" class="w-4 h-4"></i>
-            Gửi toàn bộ báo cáo
+          <button onclick="window.openUserModal()" class="btn btn-primary">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            Thêm người dùng
           </button>
         </div>
-
-        <!-- Summary bar -->
-        <div id="dailyReportSummary" class="mb-4"></div>
-
-        <!-- Table view (default) -->
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm" id="dailyReportTable">
-              <thead class="bg-gradient-to-r from-indigo-50 to-purple-50 text-slate-700 text-xs">
+        <div class="tbl-wrap">
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead>
                 <tr>
-                  <th class="px-4 py-3 text-left font-semibold w-8"></th>
-                  <th class="px-4 py-3 text-left font-semibold">Công việc</th>
-                  <th class="px-4 py-3 text-left font-semibold hidden md:table-cell">Dự án</th>
-                  <th class="px-4 py-3 text-left font-semibold hidden lg:table-cell w-28">Hạn</th>
-                  <th class="px-4 py-3 text-left font-semibold w-28">Tiến độ</th>
-                  <th class="px-4 py-3 text-left font-semibold min-w-40">Hôm nay làm gì?</th>
-                  <th class="px-4 py-3 text-left font-semibold min-w-36 hidden xl:table-cell">Kết quả</th>
-                  <th class="px-4 py-3 text-left font-semibold min-w-32 hidden xl:table-cell">Vướng mắc</th>
-                  <th class="px-4 py-3 text-center font-semibold w-24">% Mới</th>
-                  <th class="px-4 py-3 text-center font-semibold w-20">Trạng thái</th>
-                  <th class="px-4 py-3 text-center font-semibold w-16">Lưu</th>
+                  <th>Username</th>
+                  <th>Họ tên</th>
+                  <th>Vai trò</th>
+                  <th>Phòng ban</th>
+                  <th class="text-center">Trạng thái</th>
+                  <th class="text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody id="dailyReportBody" class="divide-y divide-slate-100">
-              </tbody>
+              <tbody id="userTableBody"></tbody>
             </table>
           </div>
-          <div id="emptyDailyReport" class="hidden p-12 text-center">
-            <i data-lucide="party-popper" class="w-12 h-12 mx-auto mb-3 text-emerald-400"></i>
-            <p class="text-slate-600 font-medium">Tuyệt vời! Bạn đã báo cáo xong tất cả công việc hôm nay.</p>
-            <p class="text-slate-400 text-sm mt-1">Hoặc bạn chưa được giao công việc nào.</p>
-          </div>
         </div>
-
-        <!-- Completed today section -->
-        <div id="dailyReportDone" class="mt-6"></div>
       </section>
 
-<!-- ============ ADMIN: QUAN LY NGUOI DUNG ============ --><section id="view-adminUsers" class="view hidden"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6"><div><h2 class="text-2xl font-bold text-slate-900">Quản lý người dùng</h2><p class="text-sm text-slate-500 mt-1">Thêm / sửa / khóa tài khoản; gán nhiều phòng ban cho mỗi user</p></div><button onclick="window.openUserModal()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition"><i data-lucide="user-plus" class="w-4 h-4"></i> Thêm người dùng</button></div><div class="bg-white rounded-xl border border-slate-200 overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-600 text-xs uppercase"><tr><th class="px-4 py-3 text-left font-medium">Username</th><th class="px-4 py-3 text-left font-medium">Họ tên</th><th class="px-4 py-3 text-left font-medium">Vai trò</th><th class="px-4 py-3 text-left font-medium">Phòng ban</th><th class="px-4 py-3 text-center font-medium">Trạng thái</th><th class="px-4 py-3 text-right font-medium">Thao tác</th></tr></thead><tbody id="userTableBody" class="divide-y divide-slate-100"></tbody></table></div></div></section><!-- ============ USER MODAL ============ --><div id="userModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm"><div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10"><h3 id="userModalTitle" class="text-lg font-bold text-slate-900">Thêm người dùng</h3><button data-action="close-user-modal" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button></div><form id="userForm" class="p-6 space-y-4"><input type="hidden" id="ufId" /><div><label class="block text-sm font-medium text-slate-700 mb-1">Tên đăng nhập <span class="text-rose-500">*</span></label><input id="ufUsername" required type="text" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" /></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Mật khẩu <span id="ufPwHint" class="text-slate-400 text-xs font-normal">(bắt buộc khi tạo mới, để trống nếu không đổi)</span></label><input id="ufPassword" type="password" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" /></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Họ tên <span class="text-rose-500">*</span></label><input id="ufFullname" required type="text" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" /></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Vai trò <span class="text-rose-500">*</span></label><select id="ufRole" class="w-full px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm"><option value="employee">Nhân viên</option><option value="manager">Trưởng phòng</option><option value="director">Ban Giám đốc</option><option value="admin">Quản trị</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-2">Phòng ban <span class="text-rose-500">*</span> <span class="text-xs text-slate-400 font-normal">(phòng đầu tiên là chính; có thể chọn nhiều)</span></label><div id="ufDeptsContainer" class="border border-slate-300 rounded-lg p-3 min-h-[100px] bg-slate-50"><div id="ufDeptsChips" class="flex flex-wrap gap-1.5 mb-2"></div><div class="flex flex-wrap gap-1.5"><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="HCNS" class="rounded text-indigo-600"> HCNS</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Kế toán" class="rounded text-indigo-600"> Kế toán</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Thu mua" class="rounded text-indigo-600"> Thu mua</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Ban Giám đốc" class="rounded text-indigo-600"> Ban Giám đốc</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng IT" class="rounded text-indigo-600"> Phòng IT</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Kế toán" class="rounded text-indigo-600"> Phòng Kế toán</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Nhân sự" class="rounded text-indigo-600"> Phòng Nhân sự</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Kinh doanh" class="rounded text-indigo-600"> Phòng Kinh doanh</label><label class="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 hover:bg-white cursor-pointer text-sm dept-option"><input type="checkbox" value="Phòng Marketing" class="rounded text-indigo-600"> Phòng Marketing</label></div><p class="text-xs text-slate-400 mt-2">Phòng đầu tiên = phòng chính (hiển thị mặc định).</p></div></div><div class="flex justify-end gap-2 pt-3 border-t border-slate-100"><button type="button" data-action="close-user-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button><button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">Lưu</button></div></form></div></div></main>
-  </div>
+    </main>
 
-  <!-- ============ PROJECT MODAL (Hạng mục công việc) ============ -->
-  <div id="projectModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-        <h3 id="projectModalTitle" class="text-lg font-bold text-slate-900">Tạo công việc mới</h3>
-        <button data-action="close-project-modal" class="text-slate-400 hover:text-slate-600">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
+    <!-- ============ USER MODAL ============ -->
+    <div id="userModal" class="modal-backdrop">
+      <div class="modal" style="max-width: 560px;">
+        <div class="modal-header">
+          <h3 id="userModalTitle" class="modal-title">Thêm người dùng</h3>
+          <button data-action="close-user-modal" class="btn btn-ghost btn-icon"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <form id="userForm" class="modal-body space-y-4">
+          <input type="hidden" id="ufId" />
+          <div>
+            <label class="label">Tên đăng nhập *</label>
+            <input id="ufUsername" required type="text" class="input" />
+          </div>
+          <div>
+            <label class="label">Họ và tên *</label>
+            <input id="ufFullname" required type="text" class="input" />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="label">Mật khẩu <span id="ufPwHint" class="text-t3 font-normal text-xs"></span></label>
+              <input id="ufPassword" type="password" class="input" />
+            </div>
+            <div>
+              <label class="label">Vai trò *</label>
+              <select id="ufRole" required class="select">
+                <option value="employee">Nhân viên</option>
+                <option value="manager">Trưởng phòng</option>
+                <option value="director">Ban giám đốc</option>
+                <option value="admin">Quản trị</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="label">Phòng ban (có thể chọn nhiều)</label>
+            <div id="ufDeptContainer" class="checkbox-group"></div>
+          </div>
+        </form>
+        <div class="modal-footer">
+          <button type="button" data-action="close-user-modal" class="btn btn-ghost">Hủy</button>
+          <button type="submit" form="userForm" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i> Lưu</button>
+        </div>
       </div>
+    </div>
 
-      <form id="projectForm" class="p-6 space-y-4">
-        <input type="hidden" id="projectId" />
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Mã công việc <span class="text-rose-500">*</span></label>
-            <input id="fCode" required type="text" placeholder="VD: DA001"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Tên công việc <span class="text-rose-500">*</span></label>
-            <input id="fName" required type="text" placeholder="Nhập tên công việc"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
-          </div>
+    <!-- ============ PROJECT MODAL ============ -->
+    <div id="projectModal" class="modal-backdrop">
+      <div class="modal" style="max-width: 720px;">
+        <div class="modal-header">
+          <h3 id="projectModalTitle" class="modal-title">Tạo công việc mới</h3>
+          <button data-action="close-project-modal" class="btn btn-ghost btn-icon"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
+        <form id="projectForm" class="modal-body space-y-4">
+          <input type="hidden" id="projectId" />
 
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Mô tả / Yêu cầu</label>
-          <textarea id="fDescription" rows="3" placeholder="Mô tả chi tiết nội dung, yêu cầu thêm..."
-                    data-autosize data-counter-for="fDescCount"
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
-          <p class="text-xs text-slate-400 mt-1 text-right"><span id="fDescCount">0 ký tự</span></p>
-        </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Mã công việc <span class="text-danger">*</span></label>
+              <input id="fCode" required type="text" placeholder="VD: DA001" class="input font-mono" />
+            </div>
+            <div>
+              <label class="label">Tên công việc <span class="text-danger">*</span></label>
+              <input id="fName" required type="text" placeholder="Nhập tên công việc" class="input" />
+            </div>
+          </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Phòng ban chủ trì <span class="text-rose-500">*</span></label>
-            <select id="fDept" required class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-              <!-- options sẽ được JS fill động theo phòng của user -->
+            <label class="label">Mô tả / Yêu cầu</label>
+            <textarea id="fDescription" rows="3" placeholder="Mô tả chi tiết nội dung, yêu cầu thêm..."
+                      data-autosize data-counter-for="fDescCount"
+                      class="textarea"></textarea>
+            <p class="text-xs text-t3 mt-1 text-right"><span id="fDescCount">0 ký tự</span></p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Phòng ban chủ trì <span class="text-danger">*</span></label>
+              <select id="fDept" required class="select"></select>
+            </div>
+            <div>
+              <label class="label">Giao cho (Trưởng phòng) <span class="text-danger">*</span></label>
+              <select id="fAssigneeId" class="select">
+                <option value="">— Chọn người nhận —</option>
+              </select>
+              <div id="projectRoleHint" class="hidden mt-2 note-block note-warn text-xs"></div>
+            </div>
+          </div>
+
+          <div id="fParentTaskWrapper" class="hidden">
+            <label class="label">Gắn vào Hạng mục công việc (tùy chọn)</label>
+            <select id="fParentTask" class="select">
+              <option value="">— Để tạo Task độc lập —</option>
             </select>
+            <p class="text-xs text-t3 mt-1">Chọn Hạng mục = tạo Đầu việc dưới Hạng mục đó. Để trống = Task độc lập.</p>
           </div>
+
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Giao cho (Trưởng phòng) <span class="text-rose-500">*</span></label>
-            <select id="fAssigneeId"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-              <option value="">— Chọn người nhận —</option>
-            </select>
-            <div id="projectRoleHint" class="hidden mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800"></div>
+            <label class="label">Phòng phối hợp thêm</label>
+            <div id="collabDeptContainer" class="checkbox-group"></div>
           </div>
-        </div>
 
-        <div id="fParentTaskWrapper" class="hidden">
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1">
-              <i data-lucide="git-merge" class="w-3.5 h-3.5 text-violet-600"></i>
-              Gắn vào Hạng mục công việc (tùy chọn)
-            </span>
-          </label>
-          <select id="fParentTask" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
-            <option value="">— Để tạo Task độc lập —</option>
-          </select>
-          <p class="text-xs text-slate-400 mt-1">
-            💡 Chọn Hạng mục công việc = tạo Đầu việc dưới Hạng mục đó. Để trống = tạo Task mới độc lập (chỉ dùng cho việc nhỏ 1 người làm theo quy trình).
-          </p>
-        </div>
-
-        <!-- Phòng phối hợp -->
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Phòng phối hợp thêm</label>
-          <div id="collabDeptContainer" class="checkbox-group">
-            <!-- options sẽ được JS fill động theo state.departments -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Ngày bắt đầu</label>
+              <input id="fStartDate" type="date" class="input" />
+            </div>
+            <div>
+              <label class="label">Hạn xong</label>
+              <input id="fEndDate" type="date" class="input" />
+            </div>
           </div>
-        </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="label">Mức độ ưu tiên</label>
+              <select id="fPriority" class="select">
+                <option value="low">Thấp</option>
+                <option value="medium" selected>Trung bình</option>
+                <option value="high">Cao</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Tiến độ (%)</label>
+              <input id="fProgress" type="number" min="0" max="100" value="0" class="input" />
+            </div>
+            <div>
+              <label class="label">Trạng thái</label>
+              <select id="fStatus" class="select">
+                <option value="not_started">Chưa bắt đầu</option>
+                <option value="in_progress">Đang thực hiện</option>
+                <option value="completed">Hoàn thành</option>
+                <option value="on_hold">Tạm dừng</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="fResultsWrapper">
+            <label class="label">Kết quả thực hiện</label>
+            <textarea id="fResults" rows="2" placeholder="Cập nhật kết quả thực hiện..." class="textarea"></textarea>
+            <p class="text-xs text-t3 mt-1">Trường này chỉ hiển thị khi sửa — không cần điền khi tạo mới.</p>
+          </div>
+
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Ngày bắt đầu</label>
-            <input id="fStartDate" type="date"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
+            <label class="label">Tags / Nhãn</label>
+            <div id="fTagsContainer" class="tags-input-container" data-target="fTags">
+              <div id="fTagsChips" class="flex flex-wrap gap-1.5 mb-1.5"></div>
+              <input id="fTags" type="text" placeholder="Gõ tag rồi nhấn Enter hoặc dấu phẩy..." class="input" />
+            </div>
+            <p class="text-xs text-t3 mt-1">VD: urgent, audit, recurring, vendor, training</p>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Hạn xong</label>
-            <input id="fEndDate" type="date"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
-          </div>
-        </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Mức độ ưu tiên</label>
-            <select id="fPriority" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-              <option value="low">Thấp</option>
-              <option value="medium" selected>Trung bình</option>
-              <option value="high">Cao</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Tiến độ (%)</label>
-            <input id="fProgress" type="number" min="0" max="100" value="0"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Trạng thái</label>
-            <select id="fStatus" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-              <option value="not_started">Chưa bắt đầu</option>
-              <option value="in_progress">Đang thực hiện</option>
-              <option value="completed">Hoàn thành</option>
-              <option value="on_hold">Tạm dừng</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="fResultsWrapper">
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1">
-              <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
-              Kết quả thực hiện
-            </span>
-          </label>
-          <textarea id="fResults" rows="2" placeholder="Cập nhật kết quả thực hiện..."
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
-          <p class="text-xs text-slate-400 mt-1">Trường này chỉ hiển thị khi sửa — không cần điền khi tạo mới.</p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i> Tags / Nhãn</span>
-          </label>
-          <div id="fTagsContainer" class="tags-input-container" data-target="fTags">
-            <div id="fTagsChips" class="flex flex-wrap gap-1.5 mb-1.5"></div>
-            <input id="fTags" type="text" placeholder="Gõ tag rồi nhấn Enter hoặc dấu phẩy..."
-                   class="w-full px-2 py-1.5 rounded border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm" />
-          </div>
-          <p class="text-xs text-slate-400 mt-1">VD: urgent, audit, recurring, vendor, training</p>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-          <button type="button" data-action="close-project-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
-          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center gap-2">
+          <div id="projectFormWarn" class="hidden note-block note-warn text-xs"></div>
+        </form>
+        <div class="modal-footer">
+          <button type="button" data-action="close-project-modal" class="btn btn-ghost">Hủy</button>
+          <button type="submit" form="projectForm" class="btn btn-primary">
             <i data-lucide="save" class="w-4 h-4"></i>
             <span class="btn-label">Lưu công việc</span>
           </button>
         </div>
-        <div id="projectFormWarn" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2"></div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============ SUBTASK MODAL ============ -->
-  <div id="subTaskModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
-            <i data-lucide="git-branch" class="w-4 h-4 text-violet-600"></i>
-          </div>
-          <h3 id="subTaskModalTitle" class="text-lg font-bold text-slate-900">Thêm đầu việc</h3>
-          <span id="subTaskContext" class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded hidden"></span>
-        </div>
-        <button data-action="close-subtask-modal" class="text-slate-400 hover:text-slate-600">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
       </div>
+    </div>
 
-      <form id="subTaskForm" class="p-6 space-y-4">
-        <input type="hidden" id="stProjectId" />
-        <input type="hidden" id="stSubTaskId" />
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Tên đầu việc <span class="text-rose-500">*</span></label>
-          <input id="stName" required type="text" placeholder="VD: Migrate dữ liệu module kế toán"
-                 class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Mô tả thêm</label>
-          <textarea id="stDescription" rows="2" placeholder="Chi tiết yêu cầu..."
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm"></textarea>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Giao cho (Nhân viên) <span class="text-rose-500">*</span></label>
-          <select id="stAssigneeId"
-                 class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
-            <option value="">— Chọn nhân viên —</option>
-          </select>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Ngày bắt đầu</label>
-            <input id="stStartDate" type="date"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
+    <!-- ============ SUBTASK MODAL ============ -->
+    <div id="subTaskModal" class="modal-backdrop">
+      <div class="modal" style="max-width: 560px;">
+        <div class="modal-header">
+          <div class="flex items-center gap-2 min-w-0">
+            <h3 id="subTaskModalTitle" class="modal-title">Thêm đầu việc</h3>
+            <span id="subTaskContext" class="text-xs text-t2 sunken px-2 py-0.5 rounded hidden"></span>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Hạn xong</label>
-            <input id="stEndDate" type="date"
-                   class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
-          </div>
+          <button data-action="close-subtask-modal" class="btn btn-ghost btn-icon"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
+        <form id="subTaskForm" class="modal-body space-y-4">
+          <input type="hidden" id="stProjectId" />
+          <input type="hidden" id="stSubTaskId" />
 
-        <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Mức độ ưu tiên</label>
-            <select id="stPriority" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
-              <option value="low">Thấp</option>
-              <option value="medium" selected>Trung bình</option>
-              <option value="high">Cao</option>
+            <label class="label">Tên đầu việc <span class="text-danger">*</span></label>
+            <input id="stName" required type="text" placeholder="VD: Migrate dữ liệu module kế toán" class="input" />
+          </div>
+
+          <div>
+            <label class="label">Mô tả thêm</label>
+            <textarea id="stDescription" rows="2" placeholder="Chi tiết yêu cầu..." class="textarea"></textarea>
+          </div>
+
+          <div>
+            <label class="label">Giao cho (Nhân viên) <span class="text-danger">*</span></label>
+            <select id="stAssigneeId" required class="select">
+              <option value="">— Chọn nhân viên —</option>
             </select>
           </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="label">Ngày bắt đầu</label>
+              <input id="stStartDate" type="date" class="input" />
+            </div>
+            <div>
+              <label class="label">Hạn xong</label>
+              <input id="stEndDate" type="date" class="input" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="label">Mức độ ưu tiên</label>
+              <select id="stPriority" class="select">
+                <option value="low">Thấp</option>
+                <option value="medium" selected>Trung bình</option>
+                <option value="high">Cao</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Trạng thái</label>
+              <select id="stStatus" class="select">
+                <option value="not_started">Chưa bắt đầu</option>
+                <option value="in_progress">Đang thực hiện</option>
+                <option value="completed">Hoàn thành</option>
+                <option value="on_hold">Tạm dừng</option>
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Trạng thái</label>
-            <select id="stStatus" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm">
-              <option value="not_started">Chưa bắt đầu</option>
-              <option value="in_progress">Đang thực hiện</option>
-              <option value="completed">Hoàn thành</option>
-              <option value="on_hold">Tạm dừng</option>
-            </select>
+            <label class="label">Tiến độ ban đầu (%)</label>
+            <input id="stProgress" type="number" min="0" max="100" step="5" value="0" class="input" />
+            <p class="text-xs text-t3 mt-1">NV sẽ tự cập nhật tiến độ này qua báo cáo ngày.</p>
           </div>
-        </div>
 
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="percent" class="w-3.5 h-3.5"></i> Tiến độ ban đầu (%)</span>
-          </label>
-          <input id="stProgress" type="number" min="0" max="100" step="5" value="0"
-                 class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
-          <p class="text-xs text-slate-400 mt-1">NV sẽ tự cập nhật tiến độ này qua báo cáo ngày.</p>
-        </div>
-
-        <div id="stResultsWrapper">
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i> Kết quả thực hiện</span>
-          </label>
-          <textarea id="stResults" rows="2" placeholder="Mô tả kết quả đã đạt được..."
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm"></textarea>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i> Tags / Nhãn</span>
-          </label>
-          <div id="stTagsContainer" class="tags-input-container" data-target="stTags">
-            <div id="stTagsChips" class="flex flex-wrap gap-1.5 mb-1.5"></div>
-            <input id="stTags" type="text" placeholder="Gõ tag rồi nhấn Enter hoặc dấu phẩy..."
-                   class="w-full px-2 py-1.5 rounded border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none text-sm" />
+          <div id="stResultsWrapper">
+            <label class="label">Kết quả thực hiện</label>
+            <textarea id="stResults" rows="2" placeholder="Mô tả kết quả đã đạt được..." class="textarea"></textarea>
           </div>
-        </div>
 
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-          <button type="button" data-action="close-subtask-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
-          <button type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium flex items-center gap-2">
-            <i data-lucide="git-branch" class="w-4 h-4"></i> Lưu đầu việc
+          <div>
+            <label class="label">Tags / Nhãn</label>
+            <div id="stTagsContainer" class="tags-input-container" data-target="stTags">
+              <div id="stTagsChips" class="flex flex-wrap gap-1.5 mb-1.5"></div>
+              <input id="stTags" type="text" placeholder="Gõ tag rồi nhấn Enter hoặc dấu phẩy..." class="input" />
+            </div>
+          </div>
+        </form>
+        <div class="modal-footer">
+          <button type="button" data-action="close-subtask-modal" class="btn btn-ghost">Hủy</button>
+          <button type="submit" form="subTaskForm" class="btn btn-primary">
+            <i data-lucide="save" class="w-4 h-4"></i> Lưu đầu việc
           </button>
         </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============ DAILY LOG MODAL ============ -->
-  <div id="dailyLogModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
-            <i data-lucide="book-open" class="w-4 h-4 text-indigo-600"></i>
-          </div>
-          <div>
-            <h3 class="text-base font-bold text-slate-900">Nhật ký hôm nay</h3>
-            <p id="dlSubTaskName" class="text-xs text-slate-500 truncate max-w-xs"></p>
-          </div>
-        </div>
-        <button data-action="close-dailylog-modal" class="text-slate-400 hover:text-slate-600">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
       </div>
-      <form id="dailyLogForm" class="p-6 space-y-4">
-        <input type="hidden" id="dlProjectId" />
-        <input type="hidden" id="dlSubTaskId" />
+    </div>
 
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="pen-line" class="w-3.5 h-3.5"></i> Hôm nay đã làm gì?</span>
-          </label>
-          <textarea id="dlDescription" rows="2" placeholder="Mô tả các việc đã thực hiện hôm nay..."
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-500"></i> Kết quả đạt được</span>
-          </label>
-          <textarea id="dlResult" rows="2" placeholder="Kết quả cụ thể đã hoàn thành..."
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-500"></i> Vướng mắc / Khó khăn (nếu có)</span>
-          </label>
-          <textarea id="dlObstacle" rows="2" placeholder="Nêu vướng mắc nếu có, hoặc để trống..."
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"></textarea>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            <span class="flex items-center gap-1"><i data-lucide="percent" class="w-3.5 h-3.5 text-indigo-500"></i> % Hoàn thành đến hôm nay</span>
-          </label>
-          <div class="flex items-center gap-3">
-            <input id="dlProgress" type="range" min="0" max="100" step="5" value="0"
-                   class="flex-1 h-2 rounded-lg appearance-none bg-slate-200 accent-indigo-600" />
-            <span id="dlProgressLabel" class="text-sm font-bold text-indigo-600 w-12 text-right">0%</span>
+    <!-- ============ DAILY LOG MODAL ============ -->
+    <div id="dailyLogModal" class="modal-backdrop">
+      <div class="modal" style="max-width: 560px;">
+        <div class="modal-header">
+          <div class="min-w-0">
+            <h3 class="modal-title">Nhật ký hôm nay</h3>
+            <p id="dlSubTaskName" class="text-xs text-t2 truncate mt-1"></p>
           </div>
+          <button data-action="close-dailylog-modal" class="btn btn-ghost btn-icon"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
+        <form id="dailyLogForm" class="modal-body space-y-4">
+          <input type="hidden" id="dlProjectId" />
+          <input type="hidden" id="dlSubTaskId" />
 
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-          <button type="button" data-action="close-dailylog-modal" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hủy</button>
-          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center gap-2">
+          <div>
+            <label class="label">Hôm nay đã làm gì?</label>
+            <textarea id="dlDescription" rows="3" placeholder="Mô tả các việc đã thực hiện hôm nay..." class="textarea"></textarea>
+          </div>
+
+          <div>
+            <label class="label">Kết quả đạt được</label>
+            <textarea id="dlResult" rows="2" placeholder="Kết quả cụ thể đã hoàn thành..." class="textarea"></textarea>
+          </div>
+
+          <div>
+            <label class="label">Vướng mắc / Khó khăn (nếu có)</label>
+            <textarea id="dlObstacle" rows="2" placeholder="Nêu vướng mắc nếu có, hoặc để trống..." class="textarea"></textarea>
+          </div>
+
+          <div>
+            <label class="label">% Hoàn thành đến hôm nay</label>
+            <div class="flex items-center gap-3">
+              <input id="dlProgress" type="range" min="0" max="100" step="5" value="0" class="range flex-1" />
+              <span id="dlProgressLabel" class="font-mono font-bold text-accent w-12 text-right">0%</span>
+            </div>
+          </div>
+        </form>
+        <div class="modal-footer">
+          <button type="button" data-action="close-dailylog-modal" class="btn btn-ghost">Hủy</button>
+          <button type="submit" form="dailyLogForm" class="btn btn-primary">
             <i data-lucide="save" class="w-4 h-4"></i> Lưu nhật ký
           </button>
         </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============ DETAIL MODAL ============ -->
-  <div id="detailModal" class="fixed inset-0 bg-slate-900/50 hidden z-50 items-center justify-center p-4 backdrop-blur-sm">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-        <h3 id="detailTitle" class="text-lg font-bold text-slate-900">Chi tiết công việc</h3>
-        <button data-action="close-detail-modal" class="text-slate-400 hover:text-slate-600">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
       </div>
-      <div id="detailBody" class="p-6 space-y-4"></div>
+    </div>
+
+    <!-- ============ DETAIL MODAL ============ -->
+    <div id="detailModal" class="modal-backdrop">
+      <div class="modal" style="max-width: 720px;">
+        <div class="modal-header">
+          <h3 id="detailTitle" class="modal-title">Chi tiết công việc</h3>
+          <button data-action="close-detail-modal" class="btn btn-ghost btn-icon"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <div id="detailBody" class="modal-body space-y-4"></div>
+      </div>
+    </div>
+
+    <!-- ============ TOAST ============ -->
+    <div id="toast" class="toast">
+      <i data-lucide="check-circle" class="w-5 h-5" style="color: var(--success);"></i>
+      <span id="toastMsg">Thành công</span>
     </div>
   </div>
-
-  <!-- ============ TOAST ============ -->
-  <div id="toast" class="fixed bottom-6 right-6 hidden z-50 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
-    <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
-    <span id="toastMsg">Thành công</span>
-  </div>
-
-  <!-- Live range value display -->
-  <script>
-    document.addEventListener('input', function(e) {
-      if (e.target && e.target.id === 'dlProgress') {
-        const label = document.getElementById('dlProgressLabel');
-        if (label) label.textContent = e.target.value + '%';
-      }
-    });
-  </script>
 
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
-
-
-
-
-
-

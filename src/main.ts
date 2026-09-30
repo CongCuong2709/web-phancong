@@ -7,6 +7,7 @@ import { state } from './state';
 import { loadCurrentUser } from './storage';
 import { getToken, authApi, setToken } from './api';
 import { setupModalBackdropClose, setupEscapeClose, refreshIcons } from './ui';
+import { getTheme, applyTheme, bindThemeSwitcher, initThemeListener, themeSwitcherHtml } from './theme';
 import * as H from './handlers';
 import * as DR from './dailyReportHandlers';
 import * as ADM from './renderAdminUsers';
@@ -201,6 +202,26 @@ function attachAutoResize(): void {
 // Boot
 // ============================================================
 async function init(): Promise<void> {
+  // Theme bootstrap — áp dụng từ inline script đã chạy + lắng nghe thay đổi
+  applyTheme(getTheme());
+  initThemeListener();
+
+  // Mount theme switcher ở login + navbar
+  const loginMount = document.getElementById('loginThemeMount');
+  if (loginMount) loginMount.innerHTML = themeSwitcherHtml(getTheme());
+  const navMount = document.getElementById('navbarThemeMount');
+  if (navMount) navMount.innerHTML = themeSwitcherHtml(getTheme());
+  bindThemeSwitcher();
+
+  // Hiển thị tài khoản mẫu chỉ khi dev (Vite inject import.meta.env.DEV)
+  const devHint = document.getElementById('loginDevHint');
+  if (devHint) {
+    try {
+      const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env;
+      if (env && env.DEV) devHint.classList.remove('hidden');
+    } catch { /* ignore */ }
+  }
+
   setupModalBackdropClose();
   setupEscapeClose();
   attachGlobalListeners();
@@ -234,6 +255,16 @@ async function init(): Promise<void> {
   } else {
     H.showLogin();
   }
+
+  // Cập nhật highlight theme switcher khi theme đổi (cả login + nav)
+  document.addEventListener('themechange', () => {
+    const mode = getTheme();
+    document.querySelectorAll<HTMLElement>('.theme-switcher').forEach((sw) => {
+      sw.querySelectorAll<HTMLElement>('.theme-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.themeMode === mode);
+      });
+    });
+  });
 
   console.info('✅ Phân công công việc v3 — Backend API mode');
 }

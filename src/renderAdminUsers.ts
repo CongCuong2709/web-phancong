@@ -12,18 +12,18 @@ let _users: UserRecord[] = [];
 
 export async function renderAdminUsers(): Promise<void> {
   try {
-    setHTML('userTableBody', '<tr><td colspan="6" class="p-6 text-center text-slate-400">Đang tải...</td></tr>');
+    setHTML('userTableBody', '<tr><td colspan="6" class="p-6 text-center text-t3">Đang tải...</td></tr>');
     _users = await usersApi.list();
     paint();
   } catch (e) {
-    setHTML('userTableBody', `<tr><td colspan="6" class="p-6 text-center text-rose-500">Lỗi: ${escapeHtml((e as Error).message)}</td></tr>`);
+    setHTML('userTableBody', `<tr><td colspan="6" class="p-6 text-center" style="color: var(--danger);">Lỗi: ${escapeHtml((e as Error).message)}</td></tr>`);
   }
   refreshIcons();
 }
 
 function paint(): void {
   if (!_users.length) {
-    setHTML('userTableBody', '<tr><td colspan="6" class="p-6 text-center text-slate-400">Chưa có người dùng nào.</td></tr>');
+    setHTML('userTableBody', '<tr><td colspan="6" class="p-6 text-center text-t3">Chưa có người dùng nào.</td></tr>');
     return;
   }
   setHTML(
@@ -32,32 +32,32 @@ function paint(): void {
       const depts = (u.departments && u.departments.length) ? u.departments : [u.department].filter(Boolean);
       const isSelf = u.id === state.currentUser?.id;
       return `
-        <tr class="hover:bg-slate-50">
-          <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">${escapeHtml(u.username)}</td>
-          <td class="px-4 py-3">
-            <div class="font-medium text-slate-900">${escapeHtml(u.fullname)}</div>
-            <div class="text-xs text-slate-400">ID: ${escapeHtml(u.id.slice(0, 8))}</div>
+        <tr>
+          <td><span class="font-mono text-xs font-semibold text-accent">${escapeHtml(u.username)}</span></td>
+          <td>
+            <div class="font-medium text-t1">${escapeHtml(u.fullname)}</div>
+            <div class="text-xs text-t3 font-mono">ID: ${escapeHtml(u.id.slice(0, 8))}</div>
           </td>
-          <td class="px-4 py-3"><span class="badge badge-collab">${ROLE_LABEL[u.role as keyof typeof ROLE_LABEL] ?? u.role}</span></td>
-          <td class="px-4 py-3">
+          <td><span class="badge badge-collab">${ROLE_LABEL[u.role as keyof typeof ROLE_LABEL] ?? u.role}</span></td>
+          <td>
             <div class="flex flex-wrap gap-1">
               ${depts.map((d) => `<span class="badge badge-subtask">${escapeHtml(d)}</span>`).join('')}
             </div>
           </td>
-          <td class="px-4 py-3 text-center">
+          <td class="text-center">
             ${u.active
               ? '<span class="badge badge-completed">Hoạt động</span>'
               : '<span class="badge badge-overdue">Đã khóa</span>'}
           </td>
-          <td class="px-4 py-3 text-right">
+          <td class="text-right">
             <div class="inline-flex gap-1">
-              <button onclick="window.openUserModal('${u.id}')" class="p-1.5 rounded hover:bg-amber-50 text-amber-600" title="Sửa">
+              <button onclick="window.openUserModal('${u.id}')" class="btn btn-ghost btn-icon" title="Sửa">
                 <i data-lucide="pencil" class="w-4 h-4"></i>
               </button>
-              ${u.active && !isSelf ? `<button onclick="window.confirmDeleteUser('${u.id}')" class="p-1.5 rounded hover:bg-rose-50 text-rose-600" title="Khóa">
+              ${u.active && !isSelf ? `<button onclick="window.confirmDeleteUser('${u.id}')" class="btn btn-ghost btn-icon" title="Khóa" style="color: var(--danger);">
                 <i data-lucide="lock" class="w-4 h-4"></i>
               </button>` : ''}
-              ${isSelf ? '<span class="text-xs text-slate-400">(bạn)</span>' : ''}
+              ${isSelf ? '<span class="text-xs text-t3">(bạn)</span>' : ''}
             </div>
           </td>
         </tr>
@@ -107,12 +107,12 @@ export function openUserModal(id?: string): void {
     (document.getElementById('ufUsername') as HTMLInputElement).disabled = false;
   }
 
-  openModal('userModal' as 'projectModal');
+  openModal('userModal');
   refreshIcons();
 }
 
 export function closeUserModal(): void {
-  closeModal('userModal' as 'projectModal');
+  closeModal('userModal');
 }
 
 /** Lưu user (tạo hoặc sửa) */

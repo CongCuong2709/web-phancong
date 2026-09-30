@@ -1,7 +1,7 @@
 ﻿// ============================================================
 // renderTimeline.ts — Orchestrator cho view "Dòng thời gian"
 // Gộp Lịch (FullCalendar) + Gantt (CSS thuần) trong 1 view.
-// User chuyển chế độ bằng toggle Lịch / Gantt trong header.
+// v3: dùng design token
 // ============================================================
 import { state } from './state';
 import type { TimelineMode } from './types';
@@ -27,15 +27,13 @@ export function renderTimeline(): void {
 
   // Toggle UI (pill)
   const toggleHtml = `
-    <div class="inline-flex rounded-lg border border-slate-300 bg-slate-50 p-1 text-sm">
+    <div class="tabs">
       <button data-timeline-mode="calendar"
-              class="px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition
-                     ${mode === 'calendar' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+              class="tab ${mode === 'calendar' ? 'active' : ''}">
         <i data-lucide="calendar" class="w-4 h-4"></i> Lịch
       </button>
       <button data-timeline-mode="gantt"
-              class="px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition
-                     ${mode === 'gantt' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+              class="tab ${mode === 'gantt' ? 'active' : ''}">
         <i data-lucide="gantt-chart" class="w-4 h-4"></i> Gantt
       </button>
     </div>
@@ -46,34 +44,33 @@ export function renderTimeline(): void {
   // Body theo mode
   if (mode === 'calendar') {
     setHTML('timelineContent', `
-      <div class="bg-white rounded-xl border border-slate-200 p-3">
+      <div class="card p-3">
         <div id="calendarHost"></div>
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+      <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-t2">
         <label class="flex items-center gap-2"><input id="calIncludeTasks" type="checkbox" checked class="rounded"> Bao gồm CV gốc</label>
         <label class="flex items-center gap-2"><input id="calIncludeSubs" type="checkbox" checked class="rounded"> Bao gồm đầu việc</label>
-        <span class="flex items-center gap-1.5 ml-2"><span class="inline-block w-3 h-3 rounded bg-slate-400"></span>Chưa bắt đầu</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-blue-500"></span>Đang thực hiện</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-emerald-500"></span>Hoàn thành</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-amber-500"></span>Tạm dừng</span>
+        <span class="flex items-center gap-1.5 ml-2"><span class="inline-block w-3 h-3 rounded" style="background: var(--text-tertiary);"></span>Chưa bắt đầu</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--accent);"></span>Đang thực hiện</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--success);"></span>Hoàn thành</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--warn);"></span>Tạm dừng</span>
       </div>
     `);
     refreshIcons();
-    // Gắn lại listener cho checkbox (vì innerHTML mới)
     bindCalendarCheckboxes();
     renderCalendar();
   } else {
     setHTML('timelineContent', `
-      <div class="bg-white rounded-xl border border-slate-200 p-3">
+      <div class="card p-3">
         <div class="flex flex-wrap items-center gap-2 mb-3">
-          <button id="ganttPrev" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium flex items-center gap-1">
+          <button id="ganttPrev" class="btn btn-ghost">
             <i data-lucide="chevron-left" class="w-4 h-4"></i> Trước
           </button>
-          <button id="ganttToday" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">Hôm nay</button>
-          <button id="ganttNext" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium flex items-center gap-1">
+          <button id="ganttToday" class="btn btn-ghost">Hôm nay</button>
+          <button id="ganttNext" class="btn btn-ghost">
             Sau <i data-lucide="chevron-right" class="w-4 h-4"></i>
           </button>
-          <select id="ganttRange" class="px-3 py-2 rounded-lg border border-slate-300 outline-none text-sm">
+          <select id="ganttRange" class="select">
             <option value="week">Tuần</option>
             <option value="month" selected>Tháng</option>
             <option value="quarter">Quý</option>
@@ -81,11 +78,11 @@ export function renderTimeline(): void {
         </div>
         <div id="ganttHost" class="gantt-host"></div>
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-blue-500"></span>CV gốc</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-violet-500"></span>đầu việc</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-rose-500"></span>Quá hạn</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded bg-emerald-500"></span>Hoàn thành</span>
+      <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-t2">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--accent);"></span>CV gốc</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--text-secondary);"></span>đầu việc</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--danger);"></span>Quá hạn</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background: var(--success);"></span>Hoàn thành</span>
       </div>
     `);
     refreshIcons();
@@ -97,8 +94,6 @@ let cbBound = false;
 function bindCalendarCheckboxes(): void {
   if (cbBound) return;
   cbBound = true;
-  // event delegation ở document, không cần bind lại mỗi lần — đã làm trong renderCalendar.ts
-  // Ở đây chỉ đánh dấu để tránh work thừa
 }
 
 /** Bind 1 lần cho toggle Lịch / Gantt (event delegation) */
