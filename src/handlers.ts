@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Event handlers — auth, CRUD, navigation, modal flows
 // Phiên bản v3: dùng backend API thay localStorage
 // ============================================================
@@ -338,15 +338,18 @@ export function openProjectModal(id?: string): void {
   // Auto-suggest mã mới (nếu không phải edit)
   if (!id) suggestNextCode();
 
-  // Gợi ý theo vai trò (BGĐ vs TP)
+  // Gợi ý theo vai trò — Flat model (Phase 3): ai cũng tạo được Đầu việc, không ép workflow
   const hintEl = document.getElementById('projectRoleHint');
   if (hintEl && state.currentUser) {
     const role = state.currentUser.role;
-    if (role === 'director') {
-      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> BGĐ nên tạo Hạng mục công việc lớn, giao cho Trưởng phòng để họ phân rã thành SubTask cho Nhân viên (tránh giao vi mô).`;
+    if (role === 'employee') {
+      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> Đầu việc sẽ được giao cho 1 người thực hiện — bạn có thể tự giao cho mình.`;
       hintEl.classList.remove('hidden');
     } else if (role === 'manager') {
-      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> Sau khi tạo, bạn nên phân rã thành các SubĐầu việc và giao cho Nhân viên trong phòng (≥ 1 SubTask, trừ việc nhỏ 1 người làm).`;
+      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> Giao trực tiếp cho Nhân viên trong phòng, hoặc gắn vào Hạng mục lớn nếu muốn nhóm.`;
+      hintEl.classList.remove('hidden');
+    } else if (role === 'director') {
+      hintEl.innerHTML = `💡 <strong>Gợi ý:</strong> Tạo Đầu việc trực tiếp cho NV hoặc gắn vào Hạng mục lớn nếu cần nhóm nhiều việc.`;
       hintEl.classList.remove('hidden');
     } else {
       hintEl.classList.add('hidden');
@@ -382,25 +385,23 @@ function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void 
 
   const myDepts = getMyDeptList(me);
 
-  // BGĐ: chỉ giao cho Trưởng phòng (role=manager); không giao cho BGĐ khác
-  // Admin: tất cả manager + director (trừ self)
-  // Manager: manager + director trong cùng phòng (trừ self)
+  // Flat model (Phase 3): ai cũng có thể giao cho bất kỳ ai (trừ chính mình)
+  // - Admin: tất cả manager + director
+  // - Director: tất cả manager + director + employee (toàn công ty)
+  // - Manager: tất cả manager + employee (trong hoặc ngoài phòng)
+  // - Employee: chỉ manager (NV không nên giao việc cho người khác)
   let users = state.allUsers.filter((u) => u.id !== me.id);
 
-  if (me.role === 'director') {
-    users = users.filter((u) => u.role === 'manager');
-  } else if (me.role === 'admin') {
+  if (me.role === 'admin') {
     users = users.filter((u) => u.role === 'manager' || u.role === 'director');
+  } else if (me.role === 'director') {
+    // BGĐ có thể giao cho bất kỳ ai (NV, TP, BGĐ khác) - flat model
+    users = users.filter((u) => u.role === 'manager' || u.role === 'director' || u.role === 'employee');
   } else if (me.role === 'manager') {
-    users = users.filter(
-      (u) => (u.role === 'manager' || u.role === 'director') &&
-      (() => {
-        const ud = (u.departments && u.departments.length) ? u.departments : [u.department].filter(Boolean);
-        return ud.some((d) => myDepts.includes(d));
-      })()
-    );
+    // TP có thể giao cho NV hoặc TP khác - flat model (bỏ ràng buộc cùng phòng)
+    users = users.filter((u) => u.role === 'manager' || u.role === 'employee');
   } else {
-    // NV không nên vào đây, fallback an toàn: chỉ manager trong phòng mình
+    // Employee: chỉ giao cho manager (NV không nên giao việc cho NV khác)
     users = users.filter((u) => u.role === 'manager');
   }
 
@@ -410,9 +411,12 @@ function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void 
 }
 
 /**
- * Dropdown "Giao cho (Nhân viên)" cho SUBTASK.
- * - BGĐ/Admin: thấy tất cả employee + manager (chọn người thực hiện)
- * - Manager/Employee: chỉ thấy người trong (các) phòng mình, trừ chính mình
+ * Dropdown "Giao cho (Nhân viên)" cho Đầu việc con.
+ * Flat model: BGĐ/Admin/Manager đều có thể giao cho bất kỳ NV/TP nào.
+ * - Admin: thấy tất cả employee + manager
+ * - Director: thấy tất cả employee + manager (toàn công ty)
+ * - Manager: thấy tất cả employee + manager (bỏ ràng buộc cùng phòng)
+ * - Employee: thấy manager (NV không nên giao cho NV khác)
  */
 function populateEmployeeDropdown(selectId: string): void {
   const el = document.getElementById(selectId) as HTMLSelectElement | null;
@@ -421,19 +425,12 @@ function populateEmployeeDropdown(selectId: string): void {
   const me = state.currentUser;
   if (!me) return;
 
-  const myDepts = getMyDeptList(me);
-
   let users = state.allUsers.filter((u) =>
     (u.role === 'employee' || u.role === 'manager') && u.id !== me.id
   );
 
-  if (me.role === 'manager' || me.role === 'employee') {
-    // TP / NV chỉ thấy đồng nghiệp cùng phòng
-    users = users.filter((u) => {
-      const ud = (u.departments && u.departments.length) ? u.departments : [u.department].filter(Boolean);
-      return ud.some((d) => myDepts.includes(d));
-    });
-  }
+  // Flat model: bỏ ràng buộc cùng phòng — ai cũng giao được cho ai
+  // (Trừ employee không giao cho employee khác — không nên)
 
   el.innerHTML = '<option value="">— Chọn nhân viên —</option>' +
     users.map(u => `<option value="${u.id}">${u.fullname} (${u.department})</option>`).join('');
@@ -610,8 +607,9 @@ function populateTagSuggestions(): void {
 
 /**
  * Populate dropdown "Gắn vào Hạng mục công việc" trong form Tạo công việc.
- * - BGĐ: KHÔNG hiển thị (BGĐ không tạo Đầu việc trực tiếp)
- * - Manager/Admin: hiện tất cả task mà user có thể quản lý trong (các) phòng của mình
+ * Flat model (Phase 3): ai cũng có thể tạo Đầu việc con dưới Hạng mục có sẵn.
+ * - Hiển thị cho tất cả role, kể cả BGĐ
+ * - Mặc định = "Đầu việc độc lập" (không gắn cha)
  */
 function populateParentTaskSelect(): void {
   const sel = document.getElementById('fParentTask') as HTMLSelectElement | null;
@@ -619,12 +617,7 @@ function populateParentTaskSelect(): void {
   const me = state.currentUser;
   if (!sel || !wrapper || !me) return;
 
-  // BGĐ không được gắn hạng mục công việc (vì sẽ trở thành Đầu việc — BGĐ bị cấm)
-  if (me.role === 'director') {
-    wrapper.classList.add('hidden');
-    sel.disabled = true;
-    return;
-  }
+  // Flat model: không ẩn dropdown cho BGĐ nữa — ai cũng gắn được
   wrapper.classList.remove('hidden');
   sel.disabled = false;
 
@@ -720,20 +713,7 @@ export function handleSaveProject(e: Event): void {
     .then((createdOrUpdated) => {
       showToast(id ? 'Đã cập nhật công việc' : 'Đã tạo công việc mới');
       closeProjectModal();
-      // Hỏi TP/Admin phân rã Đầu việc ngay sau khi tạo Hạng mục công việc MỚI (chỉ khi tạo root task, không phải SubTask)
-      const me = state.currentUser;
-      if (!id && !parentTaskId && createdOrUpdated && me && (me.role === 'manager' || me.role === 'admin')) {
-        const taskCode = (createdOrUpdated as Project).code || '';
-        setTimeout(() => {
-          if (window.confirm(
-            `Task "${taskCode} — ${(createdOrUpdated as Project).name}" đã tạo.\n\n` +
-            `Bạn có muốn phân rã thành các Đầu việc và giao cho Nhân viên ngay bây giờ không?\n` +
-            `(Khuyến nghị cho Trưởng phòng theo quy trình chuẩn)`
-          )) {
-            openSubTaskModal((createdOrUpdated as Project).id);
-          }
-        }, 200);
-      }
+      // Flat model: không ép hỏi "phân rã ngay". User có thể tự mở detail và thêm Đầu việc nếu cần.
       return reloadTasks();
     })
     .catch((err: Error) => {

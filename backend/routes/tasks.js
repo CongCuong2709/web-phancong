@@ -203,32 +203,14 @@ router.post('/', requireRole('admin', 'director', 'manager'), (req, res) => {
     return res.status(400).json({ error: 'Trạng thái "Chưa bắt đầu" yêu cầu tiến độ = 0%' });
   }
 
-  // BGĐ: bắt buộc phải giao cho Trưởng phòng (role=manager), không giao BGĐ khác, không tự giao
-  if (req.user.role === 'director' && assigneeId) {
-    const assignee = db.prepare('SELECT role FROM users WHERE id = ? AND active = 1').get(assigneeId);
+  // Validate nhẹ: assignee phải tồn tại + đang active
+  if (assigneeId) {
+    const assignee = db.prepare('SELECT id FROM users WHERE id = ? AND active = 1').get(assigneeId);
     if (!assignee) return res.status(400).json({ error: 'Người nhận không tồn tại hoặc đã bị khóa' });
-    if (assignee.role !== 'manager') {
-      return res.status(403).json({
-        error: 'Giám đốc chỉ được giao công việc cho Trưởng phòng. Hãy chọn một Trưởng phòng để nhận.',
-      });
-    }
   }
 
-  // Manager: chỉ được assign cho user cùng phòng
-  if (req.user.role === 'manager' && assigneeId) {
-    const userDepts = db.prepare('SELECT department FROM user_departments WHERE user_id = ?').all(req.user.id).map((r) => r.department);
-    const target = db.prepare('SELECT id FROM user_departments WHERE user_id = ? AND department IN (SELECT department FROM user_departments WHERE user_id = ?)').get(assigneeId, req.user.id);
-    // Ở mức tối thiểu: phòng của manager phải chứa assignee
-    if (!userDepts.length) {
-      return res.status(403).json({ error: 'Tài khoản chưa được gán phòng ban nào' });
-    }
-    const assigneeDepts = db.prepare('SELECT department FROM user_departments WHERE user_id = ?').all(assigneeId).map((r) => r.department);
-    if (!assigneeDepts.some((d) => userDepts.includes(d))) {
-      return res.status(403).json({
-        error: 'Chỉ được giao công việc cho người cùng phòng ban mà bạn quản lý.',
-      });
-    }
-  }
+  // Flat model: BGĐ/TP/NV đều có thể giao cho bất kỳ ai — không ép role/phòng.
+  // (Phase 3 của thiết kế flat: bỏ ép buộc phân cấp cứng)
 
   // Tự tạo code nếu không cung cấp
   let taskCode = code?.trim();
@@ -369,17 +351,10 @@ router.get('/:id/subtasks', (req, res) => {
   res.json(subs);
 });
 
-// POST /api/tasks/:taskId/subtasks — Tạo subtask (manager+)
-// Theo quy trình chuẩn: BGĐ không được giao SubTask trực tiếp — chỉ quản lý tạo Task cha.
+// POST /api/tasks/:taskId/subtasks — Tạo subtask (đầu việc con)
+// Flat model: BGĐ/TP/NV đều có thể tạo, không ép buộc phân cấp.
+// (Lưu ý: route requireRole cho phép director trở lại — Phase 3 flat model)
 router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (req, res) => {
-  // BGĐ bị cấm: chỉ giao Task cha cho Trưởng phòng để họ phân rã.
-  // Admin được đặc cách (superuser).
-  if (req.user.role === 'director') {
-    return res.status(403).json({
-      error: 'Giám đốc không nên giao SubTask trực tiếp. Hãy giao Task cha cho Trưởng phòng để họ phân rã cho Nhân viên.',
-    });
-  }
-
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.taskId);
   if (!task) return res.status(404).json({ error: 'Không tìm thấy công việc' });
 

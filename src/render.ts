@@ -440,17 +440,6 @@ function projectTableRowHtml(p: Project): string {
   const hasSubTasks = p.subTasks && p.subTasks.length > 0;
   const tagBadges = tagsBadgesHtml(p.tags);
 
-  // Badge "Chưa phân rã Đầu việc" cho task mới tạo (≤ 7 ngày) chưa có SubTask nào
-  // Trừ task đang "Chưa bắt đầu" hoặc đã hoàn thành (không nhắc nữa)
-  const showUndecompBadge =
-    !hasSubTasks &&
-    isRecentlyCreated(p.createdAt, 7) &&
-    p.status !== 'completed' &&
-    p.status !== 'not_started';
-  const undecompBadge = showUndecompBadge
-    ? `<span class="badge badge-warn" title="Task gần đây chưa được phân rã thành SubTask">⚠ Chưa phân rã</span>`
-    : '';
-
   return `
     <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.openDetailModal('${p.id}')">
       <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">${escapeHtml(p.code)}</td>
@@ -459,7 +448,6 @@ function projectTableRowHtml(p: Project): string {
         ${p.description ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(p.description)}</div>` : ''}
         <div class="flex flex-wrap gap-1 mt-1">
           ${hasSubTasks ? `<span class="badge badge-subtask">${p.subTasks!.length} đầu việc</span>` : ''}
-          ${undecompBadge}
           ${tagBadges}
         </div>
       </td>
@@ -1157,12 +1145,9 @@ export function renderDetailBody(p: Project): void {
         : `<button onclick="window.closeDetailModal(); window.openProjectModal('${p.id}');" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
             <i data-lucide="pencil" class="w-4 h-4"></i> Sửa công việc
           </button>
-          ${role !== 'director' ? `<button onclick="window.openSubTaskModal('${p.id}')" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
+          <button onclick="window.openSubTaskModal('${p.id}')" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
             <i data-lucide="plus-circle" class="w-4 h-4"></i> Thêm đầu việc
-          </button>` : `
-          <button disabled title="BGĐ không giao SubTask trực tiếp — hãy giao Hạng mục công việc cho Trưởng phòng" class="flex items-center gap-2 bg-slate-200 text-slate-400 px-4 py-2 rounded-lg font-medium text-sm cursor-not-allowed">
-            <i data-lucide="lock" class="w-4 h-4"></i> Thêm đầu việc (BGĐ)
-          </button>`}
+          </button>
           <button onclick="window.confirmDelete('${p.id}'); window.closeDetailModal();" class="flex items-center gap-2 bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition">
             <i data-lucide="trash-2" class="w-4 h-4"></i> Xóa
           </button>`}
