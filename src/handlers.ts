@@ -370,11 +370,13 @@ export function closeProjectModal(): void {
 }
 
 /**
- * Dropdown "Giao cho (Trưởng phòng)" cho task CHA.
- * - BGĐ: chỉ thấy manager (TP) - không giao cho BGĐ khác, không tự giao
- * - Admin: thấy tất cả manager + director (trừ self)
- * - Manager: chỉ thấy manager + director trong (các) phòng của mình (trừ self)
- * Tránh: BGĐ tự giao cho mình; TP giao cho TP khác phòng ban.
+ * Dropdown "Giao cho (Trưởng phòng)" cho task CHA — theo phân cấp:
+ *   - Admin:    không giới hạn (thấy tất cả manager + director + employee)
+ *   - Director: thấy manager + employee (KHÔNG giao cho director khác)
+ *   - Manager:  thấy employee thuộc (các) phòng của mình (KHÔNG giao cho manager khác)
+ *   - Employee: thấy manager (NV thường không tự giao việc cho người khác)
+ *
+ * Đồng bộ với backend `validateAssignment` trong backend/routes/tasks.js.
  */
 function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void {
   const el = document.getElementById(selectId) as HTMLSelectElement | null;
@@ -393,15 +395,19 @@ function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void 
   let users = state.allUsers.filter((u) => u.id !== me.id);
 
   if (me.role === 'admin') {
-    users = users.filter((u) => u.role === 'manager' || u.role === 'director');
+    // Admin: thấy tất cả role
   } else if (me.role === 'director') {
-    // BGĐ có thể giao cho bất kỳ ai (NV, TP, BGĐ khác) - flat model
-    users = users.filter((u) => u.role === 'manager' || u.role === 'director' || u.role === 'employee');
-  } else if (me.role === 'manager') {
-    // TP có thể giao cho NV hoặc TP khác - flat model (bỏ ràng buộc cùng phòng)
+    // BGĐ: chỉ manager + employee (KHÔNG director khác)
     users = users.filter((u) => u.role === 'manager' || u.role === 'employee');
+  } else if (me.role === 'manager') {
+    // TP: chỉ employee thuộc phòng mình (KHÔNG giao cho manager khác)
+    users = users.filter((u) => {
+      if (u.role !== 'employee') return false;
+      const uDepts = (u.departments && u.departments.length) ? u.departments : (u.department ? [u.department] : []);
+      return uDepts.some((d) => myDepts.includes(d));
+    });
   } else {
-    // Employee: chỉ giao cho manager (NV không nên giao việc cho NV khác)
+    // Employee: chỉ manager (NV không nên giao việc cho NV khác)
     users = users.filter((u) => u.role === 'manager');
   }
 
@@ -411,12 +417,13 @@ function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void 
 }
 
 /**
- * Dropdown "Giao cho (Nhân viên)" cho Đầu việc con.
- * Flat model: BGĐ/Admin/Manager đều có thể giao cho bất kỳ NV/TP nào.
- * - Admin: thấy tất cả employee + manager
- * - Director: thấy tất cả employee + manager (toàn công ty)
- * - Manager: thấy tất cả employee + manager (bỏ ràng buộc cùng phòng)
- * - Employee: thấy manager (NV không nên giao cho NV khác)
+ * Dropdown "Giao cho (Nhân viên)" cho Đầu việc con — theo phân cấp:
+ *   - Admin:    thấy tất cả employee + manager
+ *   - Director: thấy manager + employee (toàn công ty, không director)
+ *   - Manager:  thấy employee thuộc phòng mình HOẶC thuộc phòng task cha (KHÔNG giao manager)
+ *   - Employee: chỉ thấy manager
+ *
+ * Đồng bộ với backend `validateAssignment` + check phòng task cha trong tasks.js.
  */
 function populateEmployeeDropdown(selectId: string): void {
   const el = document.getElementById(selectId) as HTMLSelectElement | null;
@@ -425,12 +432,38 @@ function populateEmployeeDropdown(selectId: string): void {
   const me = state.currentUser;
   if (!me) return;
 
+  const myDepts = getMyDeptList(me);
+
   let users = state.allUsers.filter((u) =>
     (u.role === 'employee' || u.role === 'manager') && u.id !== me.id
   );
 
-  // Flat model: bỏ ràng buộc cùng phòng — ai cũng giao được cho ai
-  // (Trừ employee không giao cho employee khác — không nên)
+  // Lấy phòng của task cha (nếu đang edit subtask có parent) để áp dụng rule của TP
+  let taskParentDept: string | null = null;
+  const stProjectIdEl = document.getElementById('stProjectId') as HTMLInputElement | null;
+  if (stProjectIdEl?.value) {
+    const parent = state.projects.find((p) => p.id === stProjectIdEl.value);
+    if (parent) taskParentDept = parent.department;
+  }
+
+  if (me.role === 'admin') {
+    // Admin: thấy tất cả employee + manager
+  } else if (me.role === 'director') {
+    // BGĐ: chỉ manager + employee (toàn công ty)
+    users = users.filter((u) => u.role === 'manager' || u.role === 'employee');
+  } else if (me.role === 'manager') {
+    // TP: chỉ employee thuộc phòng mình HOẶC thuộc phòng task cha (KHÔNG giao manager)
+    const allowedDepts = new Set<string>(myDepts);
+    if (taskParentDept) allowedDepts.add(taskParentDept);
+    users = users.filter((u) => {
+      if (u.role !== 'employee') return false;
+      const uDepts = (u.departments && u.departments.length) ? u.departments : (u.department ? [u.department] : []);
+      return uDepts.some((d) => allowedDepts.has(d));
+    });
+  } else {
+    // Employee: chỉ manager
+    users = users.filter((u) => u.role === 'manager');
+  }
 
   el.innerHTML = '<option value="">— Chọn nhân viên —</option>' +
     users.map(u => `<option value="${u.id}">${u.fullname} (${u.department})</option>`).join('');

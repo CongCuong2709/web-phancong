@@ -33,6 +33,80 @@ function getUserDepartments(userId) {
 }
 
 // ============================================================
+// Helper: validate assignment theo phân cấp
+//   - Admin: không giới hạn (giao được cho mọi role)
+//   - Director: giao cho manager + employee (KHÔNG giao cho director khác)
+//   - Manager: giao cho employee thuộc (các) phòng của mình (KHÔNG giao cho manager khác)
+//   - Employee: middleware đã chặn ở route level
+//
+// Trả về chuỗi lỗi nếu vi phạm, null nếu OK.
+// `assigneeId = null` được coi là bỏ trống → luôn OK.
+// ============================================================
+function validateAssignment(creator, assigneeId) {
+  if (!assigneeId) return null;
+  const assignee = db.prepare(`
+    SELECT id, role, active FROM users WHERE id = ?
+  `).get(assigneeId);
+  if (!assignee || !assignee.active) {
+    return 'Người nhận không tồn tại hoặc đã bị khóa';
+  }
+
+  // Admin: không giới hạn role
+  if (creator.role === 'admin') return null;
+
+  // Director: chỉ manager + employee
+  if (creator.role === 'director') {
+    if (assignee.role === 'director') {
+      return 'Giám đốc không thể giao công việc cho Giám đốc khác. Chỉ được giao cho Trưởng phòng hoặc Nhân viên.';
+    }
+    if (assignee.role !== 'manager' && assignee.role !== 'employee') {
+      return 'Giám đốc chỉ được giao công việc cho Trưởng phòng hoặc Nhân viên.';
+    }
+    return null;
+  }
+
+  // Manager: chỉ employee trong phòng của mình, KHÔNG giao cho manager
+  if (creator.role === 'manager') {
+    if (assignee.role === 'manager') {
+      return 'Trưởng phòng không được giao công việc cho Trưởng phòng khác.';
+    }
+    if (assignee.role !== 'employee') {
+      return 'Trưởng phòng chỉ được giao công việc cho Nhân viên.';
+    }
+    const assigneeDepts = getUserDepartments(assignee.id);
+    const creatorDepts = getUserDepartments(creator.id);
+    const shared = assigneeDepts.length === 0
+      ? assignee.department && creatorDepts.includes(assignee.department)
+      : assigneeDepts.some((d) => creatorDepts.includes(d));
+    if (!shared) {
+      return 'Trưởng phòng chỉ được giao công việc cho Nhân viên thuộc (các) phòng mình phụ trách.';
+    }
+    return null;
+  }
+
+  return null;
+}
+
+// ============================================================
+// Helper: validate department theo phân cấp
+//   - Admin/Director: chọn bất kỳ phòng nào
+//   - Manager: chỉ phòng thuộc departments[] của mình
+//   - Employee: middleware đã chặn
+// Trả về chuỗi lỗi hoặc null.
+// ============================================================
+function validateDepartment(creator, department) {
+  if (!department) return null;
+  if (creator.role === 'admin' || creator.role === 'director') return null;
+  if (creator.role === 'manager') {
+    const userDepts = getUserDepartments(creator.id);
+    if (!userDepts.includes(department)) {
+      return 'Trưởng phòng chỉ được tạo/chỉnh sửa công việc thuộc (các) phòng mình phụ trách.';
+    }
+  }
+  return null;
+}
+
+// ============================================================
 // Helper: lọc task theo role — dùng user_departments
 // ============================================================
 function getTasksForUser(user) {
@@ -203,14 +277,16 @@ router.post('/', requireRole('admin', 'director', 'manager'), (req, res) => {
     return res.status(400).json({ error: 'Trạng thái "Chưa bắt đầu" yêu cầu tiến độ = 0%' });
   }
 
-  // Validate nhẹ: assignee phải tồn tại + đang active
-  if (assigneeId) {
-    const assignee = db.prepare('SELECT id FROM users WHERE id = ? AND active = 1').get(assigneeId);
-    if (!assignee) return res.status(400).json({ error: 'Người nhận không tồn tại hoặc đã bị khóa' });
-  }
+  // Validate department (nếu gửi lên) theo phân cấp
+  const deptErr = validateDepartment(req.user, department);
+  if (deptErr) return res.status(403).json({ error: deptErr });
 
-  // Flat model: BGĐ/TP/NV đều có thể giao cho bất kỳ ai — không ép role/phòng.
-  // (Phase 3 của thiết kế flat: bỏ ép buộc phân cấp cứng)
+  // Validate assignment theo phân cấp:
+  //   - BGĐ: chỉ giao cho TP + NV (không giao BGĐ khác)
+  //   - TP:  chỉ giao NV thuộc phòng mình (không giao TP khác)
+  //   - Admin: không giới hạn
+  const assignErr = validateAssignment(req.user, assigneeId);
+  if (assignErr) return res.status(403).json({ error: assignErr });
 
   // Tự tạo code nếu không cung cấp
   let taskCode = code?.trim();
@@ -286,6 +362,18 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
     }
   }
 
+  // Validate department nếu có thay đổi
+  if (department !== undefined) {
+    const deptErr = validateDepartment(req.user, department);
+    if (deptErr) return res.status(403).json({ error: deptErr });
+  }
+
+  // Validate assignment nếu có thay đổi assigneeId
+  if (assigneeId !== undefined) {
+    const assignErr = validateAssignment(req.user, assigneeId);
+    if (assignErr) return res.status(403).json({ error: assignErr });
+  }
+
   const now = new Date().toISOString();
   db.prepare(`
     UPDATE tasks SET
@@ -352,8 +440,9 @@ router.get('/:id/subtasks', (req, res) => {
 });
 
 // POST /api/tasks/:taskId/subtasks — Tạo subtask (đầu việc con)
-// Flat model: BGĐ/TP/NV đều có thể tạo, không ép buộc phân cấp.
-// (Lưu ý: route requireRole cho phép director trở lại — Phase 3 flat model)
+// Phân cấp:
+//   - Director/Admin: được thêm subtask cho mọi task (kể cả công ty khác phòng)
+//   - Manager: chỉ thêm được subtask cho task mà task.department ∈ phòng mình (hoặc phòng phối hợp)
 router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.taskId);
   if (!task) return res.status(404).json({ error: 'Không tìm thấy công việc' });
@@ -366,6 +455,26 @@ router.post('/:taskId/subtasks', requireRole('admin', 'director', 'manager'), (r
   }
 
   const { name, description, assigneeId, startDate, endDate, priority, notes, tags, progress, status, results } = req.body;
+
+  // Validate assignment (cùng rule phân cấp như task cha):
+  //   - BGĐ giao subtask cho TP + NV
+  //   - TP giao subtask cho NV cùng phòng (subtask phải thuộc phòng mình)
+  const assignErr = validateAssignment(req.user, assigneeId);
+  if (assignErr) return res.status(403).json({ error: assignErr });
+
+  // Manager: ngoài rule chung, subtask còn phải thuộc phòng mình
+  if (req.user.role === 'manager' && assigneeId) {
+    const asg = db.prepare('SELECT department FROM users WHERE id = ?').get(assigneeId);
+    const userDepts = getUserDepartments(req.user.id);
+    const taskDept = task.department;
+    // Subtask assignee phải thuộc phòng mình (userDepts) HOẶC thuộc phòng của task
+    const ok = (asg && userDepts.includes(asg.department)) || (asg && asg.department === taskDept);
+    if (!ok) {
+      return res.status(403).json({
+        error: 'Trưởng phòng chỉ được giao đầu việc cho nhân viên thuộc phòng mình hoặc thuộc phòng của công việc cha.',
+      });
+    }
+  }
   if (!name?.trim()) return res.status(400).json({ error: 'Tên công việc con là bắt buộc' });
 
   // Validate ngày SubTask: endDate >= startDate VÀ nằm trong khoảng task cha
@@ -444,6 +553,26 @@ router.put('/:taskId/subtasks/:subId', (req, res) => {
   }
 
   const { name, description, assigneeId, startDate, endDate, progress, status, priority, results, notes, tags } = req.body;
+
+  // Validate assignment nếu có thay đổi assigneeId (chỉ director/manager)
+  if (assigneeId !== undefined && (req.user.role === 'director' || req.user.role === 'manager' || req.user.role === 'admin')) {
+    const assignErr = validateAssignment(req.user, assigneeId);
+    if (assignErr) return res.status(403).json({ error: assignErr });
+
+    // Manager: thêm ràng buộc subtask phải thuộc phòng mình hoặc phòng task cha
+    if (req.user.role === 'manager' && assigneeId) {
+      const taskRow = db.prepare('SELECT department FROM tasks WHERE id = ?').get(req.params.taskId);
+      const asg = db.prepare('SELECT department FROM users WHERE id = ?').get(assigneeId);
+      const userDepts = getUserDepartments(req.user.id);
+      const ok = (asg && userDepts.includes(asg.department)) || (asg && taskRow && asg.department === taskRow.department);
+      if (!ok) {
+        return res.status(403).json({
+          error: 'Trưởng phòng chỉ được giao đầu việc cho nhân viên thuộc phòng mình hoặc thuộc phòng của công việc cha.',
+        });
+      }
+    }
+  }
+
   const now = new Date().toISOString();
 
   db.prepare(`
