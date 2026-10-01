@@ -333,10 +333,31 @@ export function openProjectModal(id?: string): void {
   populateParentTaskSelect();
   populateTagSuggestions();
   autoFillDeptFromAssignee();
+  // Cascade: đổi Phòng chủ trì → re-filter assignee + collab
+  bindDeptCascade();
   // Validation realtime
   attachFormGuards();
+  attachCodeUniquenessCheck();
+  attachFormDirtyGuard();
+  attachEndDatePastCheck();
+  updateSubmitButtonState();
   // Auto-suggest mã mới (nếu không phải edit)
   if (!id) suggestNextCode();
+
+  // T1.6 — Auto-focus field đầu tiên sau khi modal hiển thị
+  requestAnimationFrame(() => {
+    const firstField = document.getElementById(id ? 'fName' : 'fName') as HTMLInputElement | null;
+    // Khi edit, focus vào tên để sửa nhanh. Khi tạo mới, focus vào mã trước.
+    const target = id
+      ? (document.getElementById('fName') as HTMLInputElement | null)
+      : (document.getElementById('fCode') as HTMLInputElement | null);
+    target?.focus();
+    target?.select?.();
+  });
+
+  // Reset dirty flag sau khi form đã populate xong
+  // (attachFormDirtyGuard sẽ set true khi user nhập; ở đây chỉ reset)
+  setTimeout(() => { resetFormDirty(); }, 0);
 
   // Gợi ý theo vai trò — Flat model (Phase 3): ai cũng tạo được Đầu việc, không ép workflow
   const hintEl = document.getElementById('projectRoleHint');
@@ -361,11 +382,11 @@ export function openProjectModal(id?: string): void {
 }
 
 export function closeProjectModal(): void {
-  // Confirm nếu form có dữ liệu đang nhập
-  const nameEl = document.getElementById('fName') as HTMLInputElement | null;
-  if (nameEl?.value?.trim() && !window.confirm('Form đang có dữ liệu chưa lưu. Đóng cửa sổ?')) {
+  // Confirm nếu form đã dirty (user đã nhập mà chưa lưu)
+  if (isFormDirty() && !window.confirm('Form đang có dữ liệu chưa lưu. Đóng cửa sổ?')) {
     return;
   }
+  resetFormDirty();
   closeModal('projectModal');
 }
 
@@ -378,7 +399,7 @@ export function closeProjectModal(): void {
  *
  * Đồng bộ với backend `validateAssignment` trong backend/routes/tasks.js.
  */
-function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void {
+function populateAssigneeDropdown(selectId: string, deptFilter?: string): void {
   const el = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!el) return;
   const current = el.value;
@@ -409,6 +430,15 @@ function populateAssigneeDropdown(selectId: string, _deptFilter?: string): void 
   } else {
     // Employee: chỉ manager (NV không nên giao việc cho NV khác)
     users = users.filter((u) => u.role === 'manager');
+  }
+
+  // Reactive filter: nếu truyền deptFilter → chỉ giữ user thuộc phòng đó
+  // Áp dụng cho cả BGĐ/Admin/Manager khi muốn gán task vào 1 phòng cụ thể
+  if (deptFilter) {
+    users = users.filter((u) => {
+      const uDepts = (u.departments && u.departments.length) ? u.departments : (u.department ? [u.department] : []);
+      return uDepts.includes(deptFilter);
+    });
   }
 
   el.innerHTML = '<option value="">— Chọn người nhận —</option>' +
@@ -507,23 +537,28 @@ function populateDeptSelectInForm(): void {
 }
 
 /**
- * Populate checkbox group "Phòng phối hợp thêm" - dùng state.departments (động theo DB)
+ * Populate checkbox group "Phòng phối hợp thêm" - loại trừ Phòng ban chủ trì hiện tại.
+ * Reactive: khi fDept đổi → gọi lại để cập nhật (vì phòng bị loại trừ thay đổi).
  */
 function populateCollabCheckboxes(): void {
   const wrap = document.getElementById('collabDeptContainer');
   if (!wrap) return;
-  const me = state.currentUser;
-  if (!me) return;
   const allDepts = state.departments && state.departments.length
     ? state.departments
     : [];
-  const myDept = me.department || '';
-  // Loại trừ phòng chủ trì của mình ra khỏi collab (logic nghiệp vụ: collab ≠ primary)
-  const filtered = allDepts.filter((d) => d && d !== myDept);
+  const deptSel = document.getElementById('fDept') as HTMLSelectElement | null;
+  const primaryDept = deptSel?.value || '';
+  // Lưu các giá trị đang được check để giữ nguyên sau khi re-render
+  const checkedSet = new Set(
+    Array.from(document.querySelectorAll<HTMLInputElement>('input[name="collabDept"]:checked'))
+      .map((cb) => cb.value)
+      .filter((v) => v && v !== primaryDept),
+  );
+  const filtered = allDepts.filter((d) => d && d !== primaryDept);
   wrap.innerHTML = filtered
     .map((d) => `
       <label>
-        <input type="checkbox" name="collabDept" value="${escapeHtml(d)}" class="w-4 h-4 rounded text-indigo-600" />
+        <input type="checkbox" name="collabDept" value="${escapeHtml(d)}" class="w-4 h-4 rounded text-indigo-600" ${checkedSet.has(d) ? 'checked' : ''} />
         <span>${escapeHtml(d)}</span>
       </label>`)
     .join('');
@@ -532,6 +567,7 @@ function populateCollabCheckboxes(): void {
 /**
  * Auto-fill "Phòng ban chủ trì" khi user chọn Assignee (TP).
  * Nếu TP có nhiều phòng → lấy phòng chính.
+ * Đồng thời: khi đổi assignee → cập nhật collab checkboxes (vì loại trừ phòng chủ trì mới).
  */
 function autoFillDeptFromAssignee(): void {
   const sel = document.getElementById('fAssigneeId') as HTMLSelectElement | null;
@@ -547,8 +583,60 @@ function autoFillDeptFromAssignee(): void {
       || assignee.department;
     if (primaryDept && deptSel.querySelector(`option[value="${primaryDept}"]`)) {
       deptSel.value = primaryDept;
+      // Cascade: đổi fDept → re-populate collab checkboxes (loại trừ phòng mới)
+      populateCollabCheckboxes();
     }
   };
+}
+
+/**
+ * Reactive: khi user đổi "Phòng ban chủ trì" (fDept) →
+ *   1. Re-filter dropdown "Giao cho" theo phòng đó
+ *   2. Re-filter checkbox "Phòng phối hợp" (loại trừ phòng chủ trì)
+ *   3. Clear assignee nếu không còn khớp phòng
+ *   4. Hiển thị warning nếu assignee vẫn không khớp
+ */
+let deptCascadeBound = false;
+function bindDeptCascade(): void {
+  if (deptCascadeBound) return;
+  deptCascadeBound = true;
+  const deptSel = document.getElementById('fDept') as HTMLSelectElement | null;
+  const assigneeSel = document.getElementById('fAssigneeId') as HTMLSelectElement | null;
+  const hintEl = document.getElementById('projectRoleHint');
+  if (!deptSel || !assigneeSel) return;
+
+  deptSel.addEventListener('change', () => {
+    const dept = deptSel.value;
+
+    // 1. Re-populate collab (loại trừ phòng mới)
+    populateCollabCheckboxes();
+
+    // 2. Re-filter assignee theo phòng
+    const prevAssignee = assigneeSel.value;
+    populateAssigneeDropdown('fAssigneeId', dept);
+
+    // 3. Cảnh báo nếu assignee trước đó không thuộc phòng mới
+    if (prevAssignee) {
+      const asg = state.allUsers.find((u) => u.id === prevAssignee);
+      if (asg && dept) {
+        const asgDepts = (asg.departments && asg.departments.length) ? asg.departments : (asg.department ? [asg.department] : []);
+        if (!asgDepts.includes(dept)) {
+          // Đã bị loại khỏi dropdown — clear
+          assigneeSel.value = '';
+          if (hintEl) {
+            hintEl.innerHTML = `⚠ <strong>Người nhận trước</strong> (${escapeHtml(asg.fullname)}) không thuộc phòng <strong>${escapeHtml(dept)}</strong>. Vui lòng chọn lại.`;
+            hintEl.classList.remove('hidden');
+            hintEl.className = hintEl.className.replace(/note-warn|note-info/g, '').trim();
+            hintEl.classList.add('note-block', 'note-warn', 'text-xs');
+            hintEl.classList.add('mt-2');
+          }
+        } else {
+          // Vẫn hợp lệ — giữ nguyên
+          assigneeSel.value = prevAssignee;
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -614,6 +702,156 @@ function attachFormGuards(): void {
   statusEl?.addEventListener('change', check);
   progressEl?.addEventListener('input', check);
 }
+
+/**
+ * T1.1 — Submit button: enable/disable realtime theo form hợp lệ.
+ * Disable khi: thiếu tên, code trùng, ngày invalid, status↔progress mismatch.
+ */
+function updateSubmitButtonState(): void {
+  const submitBtn = document.querySelector<HTMLButtonElement>('button[form="projectForm"][type="submit"]');
+  if (!submitBtn) return;
+  const form = document.getElementById('projectForm') as HTMLFormElement | null;
+  if (!form) return;
+
+  const name = (document.getElementById('fName') as HTMLInputElement | null)?.value.trim() || '';
+  const code = (document.getElementById('fCode') as HTMLInputElement | null)?.value.trim() || '';
+  const codeWarn = document.getElementById('fCodeWarn');
+  const codeInvalid = codeWarn && !codeWarn.classList.contains('hidden');
+
+  const startEl = document.getElementById('fStartDate') as HTMLInputElement | null;
+  const endEl = document.getElementById('fEndDate') as HTMLInputElement | null;
+  const dateInvalid = startEl?.value && endEl?.value && new Date(endEl.value) < new Date(startEl.value);
+
+  const statusEl = document.getElementById('fStatus') as HTMLSelectElement | null;
+  const progressEl = document.getElementById('fProgress') as HTMLInputElement | null;
+  const s = statusEl?.value;
+  const p = Number(progressEl?.value || 0);
+  const statusInvalid = (s === 'completed' && p < 100) || (s === 'not_started' && p > 0);
+
+  const valid = name.length > 0 && !codeInvalid && !dateInvalid && !statusInvalid;
+  submitBtn.disabled = !valid;
+  submitBtn.classList.toggle('opacity-50', !valid);
+  submitBtn.classList.toggle('cursor-not-allowed', !valid);
+}
+
+/**
+ * T1.4 — Kiểm tra mã công việc unique khi user rời ô nhập.
+ * Không block user nhập, chỉ cảnh báo + disable nút Lưu.
+ */
+let codeCheckBound = false;
+function attachCodeUniquenessCheck(): void {
+  if (codeCheckBound) return;
+  codeCheckBound = true;
+  const codeInput = document.getElementById('fCode') as HTMLInputElement | null;
+  if (!codeInput) return;
+
+  // Tạo hoặc lấy vùng cảnh báo ngay dưới input
+  let warnEl = document.getElementById('fCodeWarn');
+  if (!warnEl) {
+    warnEl = document.createElement('p');
+    warnEl.id = 'fCodeWarn';
+    warnEl.className = 'text-xs mt-1 hidden';
+    warnEl.style.color = 'var(--danger)';
+    codeInput.insertAdjacentElement('afterend', warnEl);
+  }
+
+  const check = () => {
+    const val = codeInput.value.trim();
+    const editingId = (document.getElementById('projectId') as HTMLInputElement | null)?.value || '';
+    if (!val) {
+      warnEl!.classList.add('hidden');
+      updateSubmitButtonState();
+      return;
+    }
+    const dup = state.projects.find((p) => p.code.toLowerCase() === val.toLowerCase() && p.id !== editingId);
+    if (dup) {
+      warnEl!.textContent = `⚠ Mã "${val}" đã được dùng bởi "${dup.name}". Vui lòng đổi mã khác.`;
+      warnEl!.classList.remove('hidden');
+    } else {
+      warnEl!.classList.add('hidden');
+    }
+    updateSubmitButtonState();
+  };
+  codeInput.addEventListener('blur', check);
+  codeInput.addEventListener('input', () => updateSubmitButtonState());
+
+  // Theo dõi các field khác để update nút Lưu
+  const nameInput = document.getElementById('fName') as HTMLInputElement | null;
+  nameInput?.addEventListener('input', () => updateSubmitButtonState());
+  const startEl = document.getElementById('fStartDate') as HTMLInputElement | null;
+  const endEl = document.getElementById('fEndDate') as HTMLInputElement | null;
+  startEl?.addEventListener('change', () => updateSubmitButtonState());
+  endEl?.addEventListener('change', () => updateSubmitButtonState());
+  const statusEl = document.getElementById('fStatus') as HTMLSelectElement | null;
+  const progressEl = document.getElementById('fProgress') as HTMLInputElement | null;
+  statusEl?.addEventListener('change', () => updateSubmitButtonState());
+  progressEl?.addEventListener('input', () => updateSubmitButtonState());
+}
+
+/**
+ * T1.5 — Hạn xong trong quá khứ → highlight input đỏ + warning dưới.
+ */
+let endDateCheckBound = false;
+function attachEndDatePastCheck(): void {
+  if (endDateCheckBound) return;
+  endDateCheckBound = true;
+  const endEl = document.getElementById('fEndDate') as HTMLInputElement | null;
+  if (!endEl) return;
+
+  let warnEl = document.getElementById('fEndDateWarn');
+  if (!warnEl) {
+    warnEl = document.createElement('p');
+    warnEl.id = 'fEndDateWarn';
+    warnEl.className = 'text-xs mt-1 hidden';
+    warnEl.style.color = 'var(--warn)';
+    endEl.insertAdjacentElement('afterend', warnEl);
+  }
+
+  const check = () => {
+    const val = endEl.value;
+    if (!val) {
+      warnEl!.classList.add('hidden');
+      endEl.style.borderColor = '';
+      return;
+    }
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const end = new Date(val);
+    const editingId = (document.getElementById('projectId') as HTMLInputElement | null)?.value;
+    // Khi edit, task có thể đã quá hạn từ trước → chỉ warning nhẹ, không highlight đỏ
+    if (end < today && !editingId) {
+      warnEl!.textContent = '⚠ Hạn xong trong quá khứ — kiểm tra lại năm.';
+      warnEl!.classList.remove('hidden');
+      endEl.style.borderColor = 'var(--danger)';
+    } else if (end < today && editingId) {
+      warnEl!.textContent = '⚠ Task này đã quá hạn. Bạn có thể cập nhật tiến độ = 100% và chuyển sang Hoàn thành.';
+      warnEl!.classList.remove('hidden');
+      endEl.style.borderColor = 'var(--warn)';
+    } else {
+      warnEl!.classList.add('hidden');
+      endEl.style.borderColor = '';
+    }
+  };
+  endEl.addEventListener('change', check);
+}
+
+/**
+ * T1.2 — Confirm trước khi đóng modal nếu form đã dirty (đã nhập mà chưa lưu).
+ * Lắng nghe click nút X, click backdrop, nhấn ESC.
+ */
+let formDirty = false;
+function attachFormDirtyGuard(): void {
+  const form = document.getElementById('projectForm') as HTMLFormElement | null;
+  if (!form) return;
+  const markDirty = () => { formDirty = true; };
+  form.addEventListener('input', markDirty);
+  form.addEventListener('change', markDirty);
+  // Reset dirty flag khi form vừa mở
+  formDirty = false;
+  // Sau khi save thành công → reset dirty (gọi từ submit handler)
+}
+
+function isFormDirty(): boolean { return formDirty; }
+function resetFormDirty(): void { formDirty = false; }
 
 /**
  * Tạo <datalist> gợi ý tag từ tất cả tag đã dùng trong tasks.
@@ -744,6 +982,7 @@ export function handleSaveProject(e: Event): void {
 
   promise
     .then((createdOrUpdated) => {
+      resetFormDirty(); // reset dirty trước khi close để không trigger confirm
       showToast(id ? 'Đã cập nhật công việc' : 'Đã tạo công việc mới');
       closeProjectModal();
       // Flat model: không ép hỏi "phân rã ngay". User có thể tự mở detail và thêm Đầu việc nếu cần.

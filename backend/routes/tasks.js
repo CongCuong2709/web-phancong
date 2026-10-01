@@ -414,6 +414,14 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .run(uuidv4(), 'task', req.params.id, 'Cập nhật công việc', req.user.id, req.user.fullname, now);
 
+  // Recalc bundle.progress nếu task thuộc bundle
+  if (t.bundle_id) {
+    try {
+      const { recalcBundleProgress } = require('./_helpers');
+      recalcBundleProgress(t.bundle_id);
+    } catch { /* noop */ }
+  }
+
   const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   res.json(serializeTask(updated, true));
 });
@@ -422,10 +430,19 @@ router.put('/:id', requireRole('admin', 'director', 'manager'), (req, res) => {
 // DELETE /api/tasks/:id — Xóa task (chỉ director/admin)
 // ============================================================
 router.delete('/:id', requireRole('admin', 'director'), (req, res) => {
-  const t = db.prepare('SELECT id FROM tasks WHERE id = ?').get(req.params.id);
+  const t = db.prepare('SELECT id, bundle_id FROM tasks WHERE id = ?').get(req.params.id);
   if (!t) return res.status(404).json({ error: 'Không tìm thấy công việc' });
 
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
+
+  // Recalc bundle progress nếu task thuộc bundle
+  if (t.bundle_id) {
+    try {
+      const { recalcBundleProgress } = require('./_helpers');
+      recalcBundleProgress(t.bundle_id);
+    } catch { /* noop */ }
+  }
+
   res.json({ message: 'Đã xóa công việc' });
 });
 

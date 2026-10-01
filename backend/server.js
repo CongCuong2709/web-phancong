@@ -8,11 +8,14 @@ const path = require('path');
 
 // Khởi tạo DB trước (tạo schema nếu chưa có)
 const db = require('./db');
-const { seedIfEmpty } = require('./seed');
+const { seedConstruction } = require('./seed-construction');
 
 const authRoutes  = require('./routes/auth');
 const userRoutes  = require('./routes/users');
 const taskRoutes  = require('./routes/tasks');
+const projectRoutes = require('./routes/projects');
+const phaseRoutes = require('./routes/phases');
+const bundleRoutes = require('./routes/bundles');
 
 // ============================================================
 // App setup
@@ -48,6 +51,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth',  authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
+// 4-tier model: project → phase → bundle → task
+app.use('/api/projects', projectRoutes);   // GET /api/projects (list), GET /api/projects/:id, ...
+app.use('/api', phaseRoutes);               // POST /api/projects/:projectId/phases, ...
+app.use('/api', bundleRoutes);              // POST /api/bundles, /api/projects/:projectId/bundles, ...
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -85,7 +92,7 @@ app.use((err, req, res, next) => {
 // ============================================================
 // Start
 // ============================================================
-seedIfEmpty();
+seedConstruction(); // Seed ngành xây dựng (idempotent — bỏ qua nếu đã có data)
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');

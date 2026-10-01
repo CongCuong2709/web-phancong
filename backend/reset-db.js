@@ -1,5 +1,7 @@
 // ============================================================
 // reset-db.js — Script reset & seed lại dữ liệu ban đầu
+// Chỉ dùng seed-construction (ngành xây dựng, model 4 tầng).
+// Seed cũ (seed.js) đã được archive → seed.js.bak
 // ============================================================
 const fs = require('fs');
 const path = require('path');
@@ -19,9 +21,11 @@ for (const f of files) {
   }
 }
 
-// Re-import db and seed
-const db = require('./db');
-const { seedIfEmpty } = require('./seed');
+// Khởi tạo schema (db.js tự chạy CREATE TABLE IF NOT EXISTS khi require)
+require('./db');
 
-seedIfEmpty();
-console.log('✨ Reset và khởi tạo dữ liệu mới thành công!');
+// Seed dữ liệu ngành xây dựng
+const { seedConstruction } = require('./seed-construction');
+seedConstruction();
+
+console.log('✨ Reset và khởi tạo dữ liệu xây dựng thành công!');

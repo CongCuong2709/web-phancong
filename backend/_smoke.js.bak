@@ -1,0 +1,12 @@
+// Smoke test: load all routes without starting server
+const db = require('./db');
+const projects = require('./routes/projects');
+const phases = require('./routes/phases');
+const bundles = require('./routes/bundles');
+const tasks = require('./routes/tasks');
+const users = require('./routes/users');
+const auth = require('./routes/auth');
+console.log('All routes loaded OK');
+console.log('projects:', typeof projects);
+console.log('phases:', typeof phases);
+console.log('bundles:', typeof bundles);

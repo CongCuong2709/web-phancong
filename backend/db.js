@@ -104,6 +104,79 @@ db.exec(`
     user_name   TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
   );
+
+  -- ============================================================
+  -- 4-tier model: Dự án → Giai đoạn → Hạng mục giao → Đầu việc
+  -- ============================================================
+
+  -- Tầng 1: Dự án xây dựng
+  CREATE TABLE IF NOT EXISTS construction_projects (
+    id              TEXT PRIMARY KEY,
+    code            TEXT UNIQUE NOT NULL,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    address         TEXT NOT NULL DEFAULT '',
+    project_manager_id TEXT REFERENCES users(id),
+    target_start    TEXT NOT NULL DEFAULT '',
+    target_end      TEXT NOT NULL DEFAULT '',
+    actual_end      TEXT,
+    status          TEXT NOT NULL DEFAULT 'planning'
+                    CHECK(status IN ('planning','in_progress','completed','cancelled')),
+    budget          REAL,
+    created_by      TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+  );
+
+  -- Tầng 2: Giai đoạn dự án
+  CREATE TABLE IF NOT EXISTS project_phases (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES construction_projects(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    sequence        INTEGER NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    target_start    TEXT NOT NULL DEFAULT '',
+    target_end      TEXT NOT NULL DEFAULT '',
+    actual_start    TEXT,
+    actual_end      TEXT,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','in_progress','completed')),
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    UNIQUE(project_id, sequence)
+  );
+
+  -- Tầng 3: Hạng mục giao (Bundle) — đơn vị giao BGĐ → TP
+  CREATE TABLE IF NOT EXISTS assignment_bundles (
+    id                    TEXT PRIMARY KEY,
+    code                  TEXT UNIQUE,
+    name                  TEXT NOT NULL,
+    description           TEXT NOT NULL DEFAULT '',
+    project_id            TEXT NOT NULL REFERENCES construction_projects(id) ON DELETE CASCADE,
+    phase_id              TEXT REFERENCES project_phases(id) ON DELETE SET NULL,
+    owner_id              TEXT NOT NULL REFERENCES users(id),
+    department            TEXT NOT NULL,
+    start_date            TEXT NOT NULL DEFAULT '',
+    due_date              TEXT NOT NULL DEFAULT '',
+    status                TEXT NOT NULL DEFAULT 'assigned'
+                          CHECK(status IN ('assigned','in_progress','blocked','completed','closed')),
+    progress              INTEGER NOT NULL DEFAULT 0,
+    priority              TEXT NOT NULL DEFAULT 'medium',
+    notes                 TEXT NOT NULL DEFAULT '',
+    tags                  TEXT NOT NULL DEFAULT '[]',
+    budget                REAL,
+    collaborating_depts   TEXT NOT NULL DEFAULT '[]',
+    block_reason          TEXT,
+    created_by            TEXT NOT NULL,
+    created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_bundles_project ON assignment_bundles(project_id);
+  CREATE INDEX IF NOT EXISTS idx_bundles_phase ON assignment_bundles(phase_id);
+  CREATE INDEX IF NOT EXISTS idx_bundles_owner ON assignment_bundles(owner_id);
+  CREATE INDEX IF NOT EXISTS idx_phases_project ON project_phases(project_id);
+  CREATE INDEX IF NOT EXISTS idx_projects_manager ON construction_projects(project_manager_id);
 `);
 
 // ============================================================
@@ -113,6 +186,13 @@ db.exec(`
 try { db.exec("ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE subtasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''"); } catch {}
+
+// 4-tier model — ALTER tasks để thêm project_id, bundle_id
+// (nullable cho backward compat với data cũ)
+try { db.exec("ALTER TABLE tasks ADD COLUMN project_id TEXT REFERENCES construction_projects(id) ON DELETE SET NULL"); } catch {}
+try { db.exec("ALTER TABLE tasks ADD COLUMN bundle_id  TEXT REFERENCES assignment_bundles(id)  ON DELETE SET NULL"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_bundle  ON tasks(bundle_id)");  } catch {}
 
 // ============================================================
 // Safe migration: chuyển users.department cũ vào user_departments
