@@ -5,13 +5,14 @@
 import type { Project, SubTask, CurrentUser, Role, View } from './types';
 import { state } from './state';
 import { saveCurrentUser } from './storage';
-import { authApi, tasksApi, usersApi, setToken, clearToken, type TaskPayload, type SubTaskPayload, type DailyLogPayload } from './api';
+import { authApi, tasksApi, usersApi, projectsApi, bundlesApi, setToken, clearToken, type TaskPayload, type SubTaskPayload, type DailyLogPayload } from './api';
 import { showToast, openModal, closeModal, setText, refreshIcons } from './ui';
 import { ROLE_LABEL, today, normalizeTags, escapeHtml } from './utils';
 import { getTags, setTags, resetTags, initAllTagsInputs } from './tagsInput';
 import { renderTimeline, bindTimelineToggle } from './renderTimeline';
 import { setMyTasksMode } from './render';
 import { renderAdminUsers, openUserModal, closeUserModal, handleSaveUser, confirmDeleteUser, resetUserPassword } from './renderAdminUsers';
+import { renderConstructionProjects } from './renderConstructionProjects';
 import {
   renderDashboard,
   renderProjects,
@@ -59,21 +60,25 @@ export function showApp(): void {
   refreshIcons();
 }
 
-/** Tải danh sách tasks + users/departments từ backend */
+/** Tải danh sách tasks + users/departments + dự án từ backend */
 async function loadInitialData(): Promise<void> {
   try {
     state.loading = true;
 
-    // Tải song song
-    const [tasks, departments, users] = await Promise.all([
+    // Tải song song tất cả dữ liệu cần thiết
+    const [tasks, departments, users, constructionProjects, bundles] = await Promise.all([
       tasksApi.list(),
       usersApi.departments(),
       usersApi.byDepartment(),
+      projectsApi.list().catch(() => []),   // graceful fallback nếu chưa có route
+      bundlesApi.list().catch(() => []),    // graceful fallback
     ]);
 
     state.projects = tasks;
     state.departments = departments;
     state.allUsers = users;
+    state.constructionProjects = constructionProjects;
+    state.bundles = bundles;
 
     populateDeptFilter();
     updateMyTasksBadge();
@@ -86,10 +91,17 @@ async function loadInitialData(): Promise<void> {
   }
 }
 
-/** Reload tasks từ API và re-render view hiện tại */
+/** Reload tasks + dự án từ API và re-render view hiện tại */
 async function reloadTasks(): Promise<void> {
   try {
-    state.projects = await tasksApi.list();
+    const [tasks, constructionProjects, bundles] = await Promise.all([
+      tasksApi.list(),
+      projectsApi.list().catch(() => []),
+      bundlesApi.list().catch(() => []),
+    ]);
+    state.projects = tasks;
+    state.constructionProjects = constructionProjects;
+    state.bundles = bundles;
     navigateTo(state.currentView);
     updateMyTasksBadge();
   } catch (err) {
@@ -231,10 +243,16 @@ function applyRolePermissions(): void {
 // ============================================================
 // Navigation
 // ============================================================
-export function navigateTo(view: View): void {
-  state.currentView = view;
 
-  (['dashboard', 'projects', 'myTasks', 'reports', 'timeline', 'adminUsers'] as View[]).forEach((v) => {
+/** Render view Dự án xây dựng */
+function renderConstructionProjectsView(): void {
+  renderConstructionProjects();
+}
+
+export function navigateTo(view: View | 'constructionProjects'): void {
+  state.currentView = view as View;
+
+  (['dashboard', 'projects', 'constructionProjects', 'myTasks', 'reports', 'timeline', 'adminUsers']).forEach((v) => {
     document.getElementById(`view-${v}`)?.classList.add('hidden');
   });
   document.getElementById(`view-${view}`)?.classList.remove('hidden');
@@ -243,12 +261,13 @@ export function navigateTo(view: View): void {
   document.querySelector<HTMLButtonElement>(`[data-nav="${view}"]`)?.classList.add('active');
 
   switch (view) {
-    case 'dashboard':    renderDashboard();       break;
-    case 'projects':     renderProjects();        break;
-    case 'myTasks':      renderMyTasks();         break;
-    case 'reports':      renderReports();         break;
-    case 'timeline':     renderTimeline();        break;
-    case 'adminUsers':   void renderAdminUsers(); break;
+    case 'dashboard':              renderDashboard();                   break;
+    case 'projects':               renderProjects();                    break;
+    case 'constructionProjects':   renderConstructionProjectsView();    break;
+    case 'myTasks':                renderMyTasks();                     break;
+    case 'reports':                renderReports();                     break;
+    case 'timeline':               renderTimeline();                    break;
+    case 'adminUsers':             void renderAdminUsers();             break;
   }
   refreshIcons();
 }

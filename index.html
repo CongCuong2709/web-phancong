@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
@@ -147,7 +147,11 @@
             </button>
             <button data-nav="projects" class="nav-btn">
               <i data-lucide="folder-kanban" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Công việc</span>
+              <span class="hidden sm:inline">Hạng mục</span>
+            </button>
+            <button data-nav="constructionProjects" class="nav-btn">
+              <i data-lucide="building-2" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Dự án</span>
             </button>
             <button data-nav="myTasks" id="navMyTasks" class="nav-btn relative">
               <i data-lucide="list-checks" class="w-4 h-4"></i>
@@ -257,13 +261,61 @@
         </div>
       </section>
 
+      <!-- ============ CONSTRUCTION PROJECTS (4-TIER) ============ -->
+      <section id="view-constructionProjects" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
+          <div>
+            <h2 class="font-serif text-3xl font-semibold text-t1">Dự án xây dựng</h2>
+            <span class="signature-rule"></span>
+            <p class="text-sm text-t2 mt-3">Quản lý phân cấp: Dự án → Giai đoạn → Hạng mục giao → Đầu việc</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="projects-mode-tabs">
+              <button id="cpModeHierarchy" class="projects-mode-tab active"
+                      onclick="window.renderConstructionProjects()">
+                <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                Phân cấp
+              </button>
+              <button id="cpModeList" class="projects-mode-tab"
+                      onclick="window.navigateTo('projects')">
+                <i data-lucide="list" class="w-3.5 h-3.5"></i>
+                Bảng
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter bar -->
+        <div class="cp-filter-bar">
+          <div class="relative flex-1 min-w-[200px]">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-t3 pointer-events-none"></i>
+            <input id="cpFilterSearch" type="text" placeholder="Tìm dự án..."
+                   class="input pl-9" />
+          </div>
+          <select id="cpFilterStatus" class="select" style="width:auto">
+            <option value="">Tất cả</option>
+            <option value="planning">Lập kế hoạch</option>
+            <option value="in_progress">Đang thi công</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="cancelled">Đã huỷ</option>
+          </select>
+        </div>
+
+        <!-- Hierarchy list -->
+        <div id="constructionProjectsList"></div>
+        <div id="emptyConstructionProjects" class="hidden empty-state">
+          <p class="empty-title">Chưa có dự án nào</p>
+          <p class="empty-desc">Hệ thống chưa có dữ liệu dự án. Hãy chạy seed dữ liệu hoặc tạo mới từ backend.</p>
+        </div>
+      </section>
+
       <!-- ============ PROJECTS ============ -->
       <section id="view-projects" class="view hidden">
         <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
-            <h2 class="font-serif text-3xl font-semibold text-t1">Danh sách công việc</h2>
+            <h2 class="font-serif text-3xl font-semibold text-t1">Hạng mục giao</h2>
             <span class="signature-rule"></span>
-            <p class="text-sm text-t2 mt-3">Quản lý và theo dõi các công việc đang triển khai.</p>
+            <p class="text-sm text-t2 mt-3">Danh sách hạng mục đã được phân công cho các phòng ban.</p>
           </div>
           <button data-action="open-project-modal" class="btn btn-primary">
             <i data-lucide="plus" class="w-4 h-4"></i>
@@ -287,6 +339,9 @@
             <option value="in_progress">Đang thực hiện</option>
             <option value="completed">Hoàn thành</option>
             <option value="on_hold">Tạm dừng</option>
+            <option value="assigned">Đã giao (Bundle)</option>
+            <option value="blocked">Bị chặn (Bundle)</option>
+            <option value="closed">Đã đóng (Bundle)</option>
           </select>
           <select id="filterPriority" class="select">
             <option value="">Tất cả mức độ</option>

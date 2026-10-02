@@ -1,6 +1,0 @@
-const db = require('./db');
-const dir = db.prepare("SELECT id, fullname FROM users WHERE role='director' AND active=1 ORDER BY fullname LIMIT 1").get();
-const otherDir = db.prepare("SELECT id, fullname FROM users WHERE role='director' AND active=1 AND id != ? LIMIT 1").get(dir.id);
-const mgr = db.prepare("SELECT id, fullname, department FROM users WHERE role='manager' AND active=1 ORDER BY fullname LIMIT 1").get();
-const emp = db.prepare("SELECT id, fullname, department FROM users WHERE role='employee' AND active=1 ORDER BY fullname LIMIT 1").get();
-console.log(JSON.stringify({dir, otherDir, mgr, emp}, null, 2));

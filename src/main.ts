@@ -12,6 +12,13 @@ import * as H from './handlers';
 import * as DR from './dailyReportHandlers';
 import * as ADM from './renderAdminUsers';
 import { renderProjects } from './render';
+import {
+  renderConstructionProjects,
+  toggleConstructionProject,
+  togglePhase,
+  toggleBundle,
+  openBundleDetail,
+} from './renderConstructionProjects';
 
 
 import type { View, CurrentUser, Role } from './types';
@@ -49,6 +56,12 @@ declare global {
     openUserModal: (id?: string) => void;
     confirmDeleteUser: (id: string) => void;
     resetUserPassword: (id: string) => void;
+    // 4-tier project hierarchy toggles
+    toggleConstructionProject: (id: string) => void;
+    togglePhase: (id: string) => void;
+    toggleBundle: (id: string) => void;
+    openBundleDetail: (id: string) => void;
+    renderConstructionProjects: () => void;
   }
 }
 
@@ -77,6 +90,13 @@ window.handleSaveProgress = (e: Event) => H.handleSaveProgress(e);
 
 window.openDetailModal  = (id: string) => H.openDetailModal(id);
 window.closeDetailModal = () => H.closeDetailModal();
+
+// 4-tier hierarchy toggles
+window.toggleConstructionProject = (id: string) => toggleConstructionProject(id);
+window.togglePhase  = (id: string) => togglePhase(id);
+window.toggleBundle = (id: string) => toggleBundle(id);
+window.openBundleDetail = (id: string) => openBundleDetail(id);
+window.renderConstructionProjects = () => renderConstructionProjects();
 
 // Daily Report handlers
 window.toggleDailyReportRow   = (rowId: string) => DR.toggleDailyReportRow(rowId);

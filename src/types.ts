@@ -1,10 +1,19 @@
-﻿// ============================================================
+// ============================================================
 // TypeScript types & interfaces
 // ============================================================
 
 export type Role = 'admin' | 'director' | 'manager' | 'employee';
 
 export type ProjectStatus = 'not_started' | 'in_progress' | 'completed' | 'on_hold';
+
+/** Trạng thái Hạng mục giao (Bundle) — 5 trạng thái mới */
+export type BundleStatus = 'assigned' | 'in_progress' | 'blocked' | 'completed' | 'closed';
+
+/** Trạng thái Dự án xây dựng */
+export type ConstructionProjectStatus = 'planning' | 'in_progress' | 'completed' | 'cancelled';
+
+/** Trạng thái Giai đoạn */
+export type PhaseStatus = 'pending' | 'in_progress' | 'completed';
 
 export type Priority = 'low' | 'medium' | 'high';
 
@@ -15,6 +24,9 @@ export type TimelineMode = 'calendar' | 'gantt';
 
 /** Chế độ xem trong view "Việc của tôi" (gộp Danh sách + Báo cáo ngày) */
 export type MyTasksMode = 'list' | 'daily';
+
+/** Chế độ xem trong view "Dự án" (Phân cấp / Danh sách bundle) */
+export type ProjectsViewMode = 'hierarchy' | 'list';
 
 
 export interface HistoryEntry {
@@ -36,10 +48,10 @@ export interface DailyLog {
   createdAt: string;      // ISO timestamp
 }
 
-/** Đầu việc — Trưởng phòng tạo & giao cho Nhân viên */
+/** Đầu việc — Trưởng phòng tạo & giao cho Nhân viên (= tasks trong DB) */
 export interface SubTask {
   id: string;
-  taskId?: string;          // hạng mục công việc (từ backend)
+  taskId?: string;          // bundle_id (= hạng mục cha)
   name: string;
   description: string;
   assigneeId?: string;      // user id người thực hiện
@@ -54,11 +66,19 @@ export interface SubTask {
   tags: string[];           // nhãn tự do (VD: urgent, audit, recurring)
   history: HistoryEntry[];
   dailyLogs: DailyLog[];    // nhật ký hằng ngày
+  // Liên kết 4-tier
+  projectId?: string;       // construction_projects.id (nếu có)
+  bundleId?: string;        // assignment_bundles.id (nếu có)
+  projectName?: string;     // tên dự án (join)
+  bundleName?: string;      // tên hạng mục cha (join)
+  phaseName?: string;       // tên giai đoạn (join)
+  department?: string;      // phòng ban của task
 }
 
 /**
- * Task (Công việc gốc) — Giám đốc / Trưởng phòng tạo.
+ * Hạng mục giao (Project object dùng cho API cũ) — Giám đốc / Trưởng phòng tạo.
  * Khi có subTasks, progress được tính tự động từ trung bình subTask.
+ * NOTE: "Project" ở đây thực ra là "assignment_bundles" trong DB mới.
  */
 export interface Project {
   id: string;
@@ -77,11 +97,93 @@ export interface Project {
   priority: Priority;
   results: string;
   notes: string;
-  tags: string[];                   // nhãn tự do (VD: urgent, audit, recurring)
+  tags: string[];                   // nhãn tự do
   history: HistoryEntry[];
   subTasks: SubTask[];              // danh sách đầu việc
-  createdAt?: string;              // ISO timestamp (set bởi backend serialize)
+  createdAt?: string;
   updatedAt?: string;
+  // Liên kết 4-tier (từ bundles API)
+  projectId?: string;       // construction_projects.id
+  projectName?: string;     // tên dự án (join)
+  phaseId?: string;         // project_phases.id
+  phaseName?: string;       // tên giai đoạn (join)
+  bundleStatus?: BundleStatus; // trạng thái bundle thực
+}
+
+// ============================================================
+// 4-TIER MODEL TYPES (Mới — dùng cho view Dự án)
+// ============================================================
+
+/** Tầng 1: Dự án xây dựng */
+export interface ConstructionProject {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  address: string;
+  projectManagerId?: string;
+  projectManager?: string;          // fullname
+  targetStart: string;              // YYYY-MM-DD
+  targetEnd: string;                // YYYY-MM-DD
+  actualEnd?: string;
+  status: ConstructionProjectStatus;
+  budget?: number;                  // VND
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  // Computed / join
+  phases?: ProjectPhase[];
+  totalBundles?: number;
+  completedBundles?: number;
+  overallProgress?: number;         // 0-100
+}
+
+/** Tầng 2: Giai đoạn dự án */
+export interface ProjectPhase {
+  id: string;
+  projectId: string;
+  name: string;
+  sequence: number;
+  description?: string;
+  targetStart: string;
+  targetEnd: string;
+  actualStart?: string;
+  actualEnd?: string;
+  status: PhaseStatus;
+  createdAt: string;
+  updatedAt: string;
+  // Computed / join
+  bundles?: AssignmentBundle[];
+}
+
+/** Tầng 3: Hạng mục giao (Bundle) — BGĐ → TP */
+export interface AssignmentBundle {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  projectId: string;
+  projectName?: string;             // join
+  phaseId?: string;
+  phaseName?: string;               // join
+  ownerId: string;
+  ownerName?: string;               // fullname của TP nhận
+  department: string;               // phòng ban chủ trì
+  startDate: string;
+  dueDate: string;
+  status: BundleStatus;
+  progress: number;                 // 0-100
+  priority: Priority;
+  notes?: string;
+  tags: string[];
+  budget?: number;
+  collaboratingDepts: string[];
+  blockReason?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  // Tầng 4: các đầu việc trong bundle
+  tasks?: SubTask[];
 }
 
 export interface CurrentUser {
@@ -104,4 +206,3 @@ export interface DeptProgress {
   sum: number;
   count: number;
 }
-

@@ -5,8 +5,12 @@ import type {
   Project,
   SubTask,
   ProjectStatus,
+  BundleStatus,
+  ConstructionProjectStatus,
+  PhaseStatus,
   Priority,
   Role,
+  ConstructionProject,
 } from './types';
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -14,6 +18,30 @@ export const STATUS_LABEL: Record<ProjectStatus, string> = {
   in_progress: 'Đang thực hiện',
   completed: 'Hoàn thành',
   on_hold: 'Tạm dừng',
+};
+
+/** Label cho trạng thái Hạng mục giao (Bundle) */
+export const BUNDLE_STATUS_LABEL: Record<BundleStatus, string> = {
+  assigned:    'Đã giao',
+  in_progress: 'Đang thực hiện',
+  blocked:     'Bị chặn',
+  completed:   'Hoàn thành',
+  closed:      'Đã đóng',
+};
+
+/** Label cho trạng thái Dự án */
+export const CONSTRUCTION_STATUS_LABEL: Record<ConstructionProjectStatus, string> = {
+  planning:    'Lập kế hoạch',
+  in_progress: 'Đang thi công',
+  completed:   'Hoàn thành',
+  cancelled:   'Đã huỷ',
+};
+
+/** Label cho trạng thái Giai đoạn */
+export const PHASE_STATUS_LABEL: Record<PhaseStatus, string> = {
+  pending:     'Chưa bắt đầu',
+  in_progress: 'Đang thực hiện',
+  completed:   'Hoàn thành',
 };
 
 export const PRIORITY_LABEL: Record<Priority, string> = {
@@ -29,16 +57,9 @@ export const ROLE_LABEL: Record<Role, string> = {
   employee: 'Nhân viên',
 };
 
+/** Departments mặc định (fallback khi chưa có API) */
 export const DEPARTMENTS: readonly string[] = [
-  'HCNS',
-  'Kế toán',
-  'Thu mua',
-  'Ban Giám đốc',
-  'Phòng IT',
-  'Phòng Kế toán',
-  'Phòng Nhân sự',
-  'Phòng Kinh doanh',
-  'Phòng Marketing',
+  'ĐH', 'QLDA', 'KTTC', 'TC',
 ] as const;
 
 export function uid(): string {
@@ -103,14 +124,79 @@ export function lucideRefresh(): void {
 }
 
 /**
- * Tính tiến độ tổng của Task.
- * - Nếu có SubTask: tính trung bình cộng tiến độ của các SubTask.
- * - Nếu không có SubTask: dùng progress thủ công.
+ * Tính tiến độ tổng của Hạng mục giao (Bundle).
+ * - Nếu có SubTask (đầu việc): tính trung bình cộng tiến độ.
+ * - Nếu không có: dùng progress thủ công.
  */
 export function computeTaskProgress(project: Project): number {
   if (!project.subTasks || project.subTasks.length === 0) return project.progress;
   const sum = project.subTasks.reduce((acc, st) => acc + (st.progress || 0), 0);
   return Math.round(sum / project.subTasks.length);
+}
+
+/**
+ * Tính tiến độ tổng của Dự án (từ danh sách bundles).
+ */
+export function computeProjectProgress(project: ConstructionProject): number {
+  if (project.overallProgress !== undefined) return project.overallProgress;
+  if (!project.phases || !project.phases.length) return 0;
+  const allBundles = project.phases.flatMap((ph) => ph.bundles || []);
+  if (!allBundles.length) return 0;
+  const sum = allBundles.reduce((acc, b) => acc + (b.progress || 0), 0);
+  return Math.round(sum / allBundles.length);
+}
+
+/** Định dạng tiền VND (tỷ, triệu) */
+export function formatCurrency(amount: number | undefined | null): string {
+  if (amount == null) return '—';
+  if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)} tỷ`;
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(0)} triệu`;
+  return amount.toLocaleString('vi-VN') + ' đ';
+}
+
+/** Màu sắc cho bundle status */
+export function bundleStatusColor(status: BundleStatus): string {
+  switch (status) {
+    case 'assigned':    return 'var(--accent)';
+    case 'in_progress': return 'var(--warn)';
+    case 'blocked':     return 'var(--danger)';
+    case 'completed':   return 'var(--success)';
+    case 'closed':      return 'var(--text-tertiary)';
+    default:            return 'var(--text-secondary)';
+  }
+}
+
+/** CSS class cho bundle status dot */
+export function bundleStatusCls(status: BundleStatus): string {
+  switch (status) {
+    case 'assigned':    return 's-todo';
+    case 'in_progress': return 's-doing';
+    case 'blocked':     return 's-block';
+    case 'completed':   return 's-done';
+    case 'closed':      return 's-done';
+    default:            return 's-todo';
+  }
+}
+
+/** CSS class cho construction project status */
+export function constructionStatusCls(status: ConstructionProjectStatus): string {
+  switch (status) {
+    case 'planning':    return 's-todo';
+    case 'in_progress': return 's-doing';
+    case 'completed':   return 's-done';
+    case 'cancelled':   return 's-block';
+    default:            return 's-todo';
+  }
+}
+
+/** CSS class cho phase status */
+export function phaseStatusCls(status: PhaseStatus): string {
+  switch (status) {
+    case 'pending':     return 's-todo';
+    case 'in_progress': return 's-doing';
+    case 'completed':   return 's-done';
+    default:            return 's-todo';
+  }
 }
 
 /**

@@ -26,6 +26,6 @@ require('./db');
 
 // Seed dữ liệu ngành xây dựng
 const { seedConstruction } = require('./seed-construction');
-seedConstruction();
+seedConstruction(true);
 
 console.log('✨ Reset và khởi tạo dữ liệu xây dựng thành công!');

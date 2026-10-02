@@ -1,7 +1,0 @@
-const db = require('./db');
-const t = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
-console.log('Tables:', t.map(x => x.name).join(', '));
-const cols = db.prepare("PRAGMA table_info(tasks)").all();
-console.log('tasks cols:', cols.map(c => c.name).join(', '));
-const cols2 = db.prepare("PRAGMA table_info(assignment_bundles)").all();
-console.log('bundles cols:', cols2.map(c => c.name).join(', '));
